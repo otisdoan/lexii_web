@@ -17,7 +17,9 @@ import {
   ChevronRight,
   Bell,
   Menu,
-  X,
+  X,   
+
+  
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
