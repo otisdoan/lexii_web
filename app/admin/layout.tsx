@@ -1,6 +1,8 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
+
+const NAV_PAGE_SIZE = 10;
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -11,6 +13,7 @@ import {
   ScrollText,
   Settings,
   LogOut,
+  ChevronLeft,
   ChevronRight,
   Bell,
   Menu,
@@ -44,6 +47,10 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
   const isActive = (item: typeof navItems[number]) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
+  const [navPage, setNavPage] = useState(0);
+  const totalNavPages = Math.ceil(navItems.length / NAV_PAGE_SIZE);
+  const visibleItems = navItems.slice(navPage * NAV_PAGE_SIZE, (navPage + 1) * NAV_PAGE_SIZE);
+
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -60,27 +67,54 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
-        {navItems.map(item => {
-          const Icon = item.icon;
-          const active = isActive(item);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group relative ${
-                active
-                  ? 'bg-white text-primary shadow-lg shadow-black/10'
-                  : 'text-teal-100 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-primary' : 'text-teal-200 group-hover:text-white'}`} />
-              {item.label}
-              {active && <ChevronRight className="w-3.5 h-3.5 ml-auto text-primary/50" />}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-3 py-5 flex flex-col overflow-y-auto">
+        <div className="space-y-1 flex-1">
+          {visibleItems.map(item => {
+            const Icon = item.icon;
+            const active = isActive(item);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group relative ${
+                  active
+                    ? 'bg-white text-primary shadow-lg shadow-black/10'
+                    : 'text-teal-100 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-primary' : 'text-teal-200 group-hover:text-white'}`} />
+                {item.label}
+                {active && <ChevronRight className="w-3.5 h-3.5 ml-auto text-primary/50" />}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Nav pagination */}
+        {totalNavPages > 1 && (
+          <div className="flex items-center justify-between px-2 pt-3 mt-2 border-t border-white/10">
+            <span className="text-xs text-teal-300">
+              {navPage + 1} / {totalNavPages}
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setNavPage(p => Math.max(0, p - 1))}
+                disabled={navPage === 0}
+                className="p-1 rounded-lg text-teal-200 hover:bg-white/10 disabled:opacity-30 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setNavPage(p => Math.min(totalNavPages - 1, p + 1))}
+                disabled={navPage >= totalNavPages - 1}
+                className="p-1 rounded-lg text-teal-200 hover:bg-white/10 disabled:opacity-30 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* User & Sign Out */}

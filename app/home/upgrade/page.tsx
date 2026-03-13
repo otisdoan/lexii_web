@@ -1,13 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Award, Check, Lock, ChevronRight, Star } from 'lucide-react';
+import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star } from 'lucide-react';
+
+const PRIMARY = '#1C9C8C';
+const PRIMARY_DARK = '#167D70';
+
+const SLIDES = [
+  {
+    Icon: BookOpen,
+    color: '#E6F7F5',
+    title: '30 đề thi TOEIC ETS mới nhất',
+    desc: '12.000 câu hỏi có đáp án và giải thích chi tiết',
+  },
+  {
+    Icon: Headphones,
+    color: '#EEF2FF',
+    title: 'Luyện nghe chuẩn ETS',
+    desc: '600+ audio giúp luyện nghe từ Part 1 đến Part 4',
+  },
+  {
+    Icon: BarChart2,
+    color: '#FFF7ED',
+    title: 'Phân tích điểm thi thông minh',
+    desc: 'Hệ thống tự động phân tích điểm yếu và gợi ý lộ trình học',
+  },
+  {
+    Icon: BookMarked,
+    color: '#F5F3FF',
+    title: 'Học từ vựng theo chủ đề',
+    desc: '3000+ từ vựng TOEIC với flashcard và quiz',
+  },
+] as const;
 
 const PLANS = [
-  { title: '6 tháng', badge: '10% OFF', price: null, originalPrice: null, discount: null, priceLabel: null, highlighted: false },
-  { title: 'Trọn đời', badge: 'Best Choice', price: '1.499.000 đ', originalPrice: '2.998.000 đ', discount: 'GIẢM 50%', priceLabel: null, highlighted: true },
-  { title: 'Hàng năm', badge: null, price: '599.000 đ', originalPrice: null, discount: null, priceLabel: 'Chỉ 49.000 đ/tháng', highlighted: false },
+  {
+    id: 0,
+    label: '6 tháng',
+    price: '299.000đ',
+    sub: '49.000đ / tháng',
+    badge: null as string | null,
+    discount: null as string | null,
+    featured: false,
+  },
+  {
+    id: 1,
+    label: 'Trọn đời',
+    price: '1.499.000đ',
+    sub: null as string | null,
+    badge: 'Phổ biến nhất',
+    discount: 'Giảm 50%',
+    featured: true,
+  },
+  {
+    id: 2,
+    label: '1 năm',
+    price: '599.000đ',
+    sub: '49.000đ / tháng',
+    badge: null as string | null,
+    discount: null as string | null,
+    featured: false,
+  },
 ];
 
 const FEATURES = [
@@ -25,85 +79,185 @@ const REVIEWS = [
 
 export default function UpgradePage() {
   const router = useRouter();
+  const [slide, setSlide] = useState(0);
   const [selectedPlan, setSelectedPlan] = useState(1);
 
-  const buttonLabel = selectedPlan === 0 ? 'Nâng cấp 6 tháng' : selectedPlan === 2 ? 'Nâng cấp hàng năm' : 'Nâng cấp trọn đời';
+  const advance = useCallback(() => setSlide(s => (s + 1) % SLIDES.length), []);
+
+  useEffect(() => {
+    const id = setInterval(advance, 4000);
+    return () => clearInterval(id);
+  }, [advance]);
+
+  const { Icon, color: iconBg, title, desc } = SLIDES[slide];
 
   return (
-    <div className="pb-20 lg:pb-8">
-      {/* Header */}
-      <div className="bg-primary px-4 py-4 flex items-center gap-3 rounded-md">
-        <button onClick={() => router.back()} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-          <ArrowLeft className="w-5 h-5 text-white" />
-        </button>
-        <h1 className="text-lg font-bold text-white flex-1 text-center pr-10">Nâng cấp</h1>
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F7F9' }}>
+      {/* ── Header ── */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-100 rounded-md" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+        <div className="max-w-275 mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+            aria-label="Quay lại"
+          >
+            <ChevronLeft className="w-5 h-5 text-slate-600" />
+          </button>
+          <Sparkles className="w-5 h-5 shrink-0" style={{ color: PRIMARY }} />
+          <h1 className="text-base font-bold text-slate-800">Nâng cấp Premium</h1>
+        </div>
       </div>
 
-      <div className="px-4 py-4 space-y-5">
-        {/* Feature Banner */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
-          <div className="w-24 h-24 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Award className="w-14 h-14 text-primary" />
-          </div>
-          <h2 className="text-lg font-bold text-slate-800">30 đề thi cấu trúc MỚI NHẤT</h2>
-          <p className="text-sm text-slate-500 mt-2">12.000 câu hỏi TOEIC đầy đủ đáp án và giải thích chi tiết</p>
-          <div className="flex justify-center gap-1.5 mt-4">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            <span className="w-2 h-2 rounded-full bg-primary/30" />
-            <span className="w-2 h-2 rounded-full bg-primary/30" />
-          </div>
-        </div>
+      <div className="max-w-275 mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
 
-        {/* Plan selector */}
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {PLANS.map((plan, i) => (
-            <button
-              key={i}
-              onClick={() => setSelectedPlan(i)}
-              className={`shrink-0 ${plan.highlighted ? 'w-52' : 'w-36'} p-4 rounded-2xl border-2 text-left transition-all relative ${
-                selectedPlan === i ? 'border-primary shadow-lg shadow-primary/15' : 'border-slate-200'
-              } bg-white`}
+        {/* ── Carousel ── */}
+        <div
+          className="w-full bg-white rounded-2xl overflow-hidden"
+          style={{ boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}
+        >
+          <div
+            key={slide}
+            className="carousel-slide flex flex-col items-center justify-center text-center px-6 sm:px-16 pt-10 pb-6 min-h-50"
+          >
+            <div
+              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 shrink-0"
+              style={{ backgroundColor: iconBg }}
             >
-              {plan.highlighted && (
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-primary text-white text-[10px] font-bold rounded-full tracking-wide">
-                  Best Choice
-                </span>
-              )}
-              {plan.badge && !plan.highlighted && (
-                <span className="inline-block px-2 py-0.5 bg-teal-50 text-primary text-[10px] font-bold rounded-full mb-2">{plan.badge}</span>
-              )}
-              <p className="text-sm font-bold text-slate-800">{plan.title}</p>
-              {plan.price && (
-                <p className={`${plan.highlighted ? 'text-xl' : 'text-base'} font-black text-primary mt-2`}>{plan.price}</p>
-              )}
-              {plan.originalPrice && (
-                <p className="text-xs text-slate-400 line-through italic mt-0.5">{plan.originalPrice}</p>
-              )}
-              {plan.discount && (
-                <p className="text-xs font-bold text-orange-500 mt-1">{plan.discount}</p>
-              )}
-              {plan.priceLabel && (
-                <p className="text-[10px] text-slate-500 mt-1">{plan.priceLabel}</p>
-              )}
-            </button>
-          ))}
+              <Icon className="w-10 h-10" style={{ color: PRIMARY }} />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2 leading-snug">{title}</h2>
+            <p className="text-sm text-slate-500 max-w-sm leading-relaxed">{desc}</p>
+          </div>
+
+          {/* Dot indicators */}
+          <div className="flex items-center justify-center gap-2 py-5">
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setSlide(i)}
+                aria-label={`Slide ${i + 1}`}
+                className="rounded-full transition-all duration-300 focus:outline-none"
+                style={{
+                  width: slide === i ? 22 : 8,
+                  height: 8,
+                  backgroundColor: slide === i ? PRIMARY : '#D1D5DB',
+                }}
+              />
+            ))}
+          </div>
         </div>
 
-        {/* CTA Button */}
-        <button className="w-full py-3.5 bg-primary text-white rounded-full font-bold text-[15px] hover:bg-primary-dark transition-colors">
-          {buttonLabel}
+        {/* ── Social Proof ── */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6">
+          <div className="flex items-center gap-2.5 bg-white rounded-full px-5 py-2.5" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <span className="text-lg leading-none">⭐</span>
+            <span className="text-sm font-semibold text-slate-700">4.8/5 từ hơn 3.200 học viên</span>
+          </div>
+          <div className="flex items-center gap-2.5 bg-white rounded-full px-5 py-2.5" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <span className="text-lg leading-none">🔥</span>
+            <span className="text-sm font-semibold text-slate-700">12.000+ người đang học trên Lexii</span>
+          </div>
+        </div>
+
+        {/* ── Pricing ── */}
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 text-center mb-7">Chọn gói phù hợp với bạn</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-center">
+            {PLANS.map(plan => {
+              const isSelected = selectedPlan === plan.id;
+              return (
+                <button
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan.id)}
+                  className={`relative flex flex-col bg-white text-left cursor-pointer transition-all duration-200 focus:outline-none ${
+                    plan.featured ? 'order-first sm:order-0' : ''
+                  }`}
+                  style={{
+                    borderRadius: 16,
+                    border: `2px solid ${isSelected || plan.featured ? PRIMARY : '#E5E7EB'}`,
+                    boxShadow: plan.featured
+                      ? `0 6px 28px rgba(28,156,140,0.16)`
+                      : '0 2px 8px rgba(0,0,0,0.05)',
+                    transform: isSelected ? 'translateY(-4px)' : 'none',
+                    padding: plan.featured ? '32px 24px 28px' : '24px 20px',
+                  }}
+                >
+                  {/* Badge */}
+                  {plan.badge && (
+                    <span
+                      className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 text-white text-[11px] font-bold rounded-full whitespace-nowrap tracking-wide"
+                      style={{ backgroundColor: PRIMARY }}
+                    >
+                      {plan.badge}
+                    </span>
+                  )}
+
+                  {/* Selected check */}
+                  {isSelected && (
+                    <div
+                      className="absolute top-4 right-4 w-5 h-5 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: PRIMARY }}
+                    >
+                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    </div>
+                  )}
+
+                  <span className="text-sm font-semibold text-slate-400 mb-3 block">{plan.label}</span>
+
+                  <span
+                    className="font-black tracking-tight block"
+                    style={{
+                      fontSize: plan.featured ? '2rem' : '1.5rem',
+                      color: PRIMARY,
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {plan.price}
+                  </span>
+
+                  {plan.discount && (
+                    <span
+                      className="mt-2 inline-block text-xs font-bold px-2.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: '#FFF3E0', color: '#C84B11' }}
+                    >
+                      {plan.discount}
+                    </span>
+                  )}
+
+                  {plan.sub && (
+                    <span className="mt-1.5 text-xs text-slate-400 block">{plan.sub}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── CTA ── */}
+        <button
+          className="w-full py-4 rounded-2xl text-white text-base font-bold tracking-wide transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
+          style={{
+            background: `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`,
+            boxShadow: `0 8px 24px rgba(28,156,140,0.28)`,
+          }}
+          onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY_DARK} 0%, #0EA5A9 100%)`; }}
+          onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`; }}
+        >
+          Nâng cấp gói đã chọn
         </button>
 
-        {/* Restore & Skip */}
-        <div className="text-center space-y-2">
-          <button className="text-primary text-sm font-medium underline underline-offset-2">
+        {/* ── Footer links ── */}
+        <div className="flex flex-col items-center gap-3 pb-6">
+          <button className="text-sm font-medium text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors">
             Khôi phục thanh toán
           </button>
-          <p className="text-xs text-slate-400">
-            Bạn có thể trải nghiệm một số phần miễn phí<br />mà không cần nâng cấp.
-          </p>
-          <button onClick={() => router.back()} className="text-orange-500 text-sm font-bold flex items-center justify-center gap-0.5 mx-auto">
-            Bỏ qua và tiếp tục <ChevronRight className="w-4 h-4" />
+          <button
+            onClick={() => router.back()}
+            className="text-sm font-semibold transition-colors hover:opacity-80"
+            style={{ color: PRIMARY }}
+          >
+            Bỏ qua và tiếp tục
           </button>
         </div>
 
@@ -128,32 +282,30 @@ export default function UpgradePage() {
 
         {/* Feature comparison */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {/* Header */}
           <div className="bg-slate-50 px-4 py-3 flex items-center">
-            <span className="flex-[2] text-[11px] font-bold text-slate-500 tracking-wide">Tính năng</span>
-            <span className="w-[70px] text-center text-[11px] font-bold text-slate-500">Miễn phí</span>
-            <span className="w-[70px] text-center text-[11px] font-bold text-primary">Premium</span>
+            <span className="flex-2 text-[11px] font-bold text-slate-500 tracking-wide">Tính năng</span>
+            <span className="w-17.5 text-center text-[11px] font-bold text-slate-500">Miễn phí</span>
+            <span className="w-17.5 text-center text-[11px] font-bold text-primary">Premium</span>
           </div>
           {FEATURES.map((f, i) => (
             <div key={i}>
               <hr className="border-slate-100" />
               <div className="px-4 py-3 flex items-center">
-                <span className="flex-[2] text-sm font-medium text-slate-600">{f.feature}</span>
-                <span className="w-[70px] flex justify-center">
+                <span className="flex-2 text-sm font-medium text-slate-600">{f.feature}</span>
+                <span className="w-17.5 flex justify-center">
                   {f.free ? <Check className="w-5 h-5 text-green-600" /> : <Lock className="w-5 h-5 text-slate-300" />}
                 </span>
-                <span className="w-[70px] flex justify-center">
+                <span className="w-17.5 flex justify-center">
                   <Check className="w-5 h-5 text-primary" />
                 </span>
               </div>
             </div>
           ))}
-          {/* Exam count row */}
           <hr className="border-slate-100" />
           <div className="px-4 py-3 flex items-center">
-            <span className="flex-[2] text-sm font-medium text-slate-600">Mở khóa đề thi thử</span>
-            <span className="w-[70px] text-center text-sm font-bold text-slate-500">4</span>
-            <span className="w-[70px] text-center text-sm font-bold text-primary">30</span>
+            <span className="flex-2 text-sm font-medium text-slate-600">Mở khóa đề thi thử</span>
+            <span className="w-17.5 text-center text-sm font-bold text-slate-500">4</span>
+            <span className="w-17.5 text-center text-sm font-bold text-primary">30</span>
           </div>
         </div>
 
@@ -181,6 +333,7 @@ export default function UpgradePage() {
             ))}
           </div>
         </div>
+
       </div>
     </div>
   );

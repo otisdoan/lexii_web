@@ -25,7 +25,7 @@ function PracticeResultContent() {
   return (
     <div className="pb-24 lg:pb-8">
       {/* Header */}
-      <div className="bg-primary px-4 py-4 flex items-center gap-3">
+      <div className="bg-primary px-4 py-4 flex items-center gap-3 rounded-md">
         <button onClick={() => router.back()} className="p-2 hover:bg-white/10 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
