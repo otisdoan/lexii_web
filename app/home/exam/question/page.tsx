@@ -271,6 +271,27 @@ function ExamQuestionContent() {
     }
 
     const { listeningScore, readingScore, totalCorrect } = calculateScores();
+    const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
+    questions.forEach((q, i) => {
+      const selectedIdx = userAnswers[i];
+      if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
+      const selected = q.options[selectedIdx];
+      answerRows.push({
+        question_id: q.id,
+        option_id: selected.id,
+        is_correct: Boolean(selected.is_correct),
+      });
+    });
+
+    const user = await getCurrentUser();
+    if (user && answerRows.length > 0) {
+      try {
+        await submitAttempt(user.id, testId, listeningScore + readingScore, answerRows);
+      } catch {
+        // Keep UX smooth even if persistence fails.
+      }
+    }
+
     const params = new URLSearchParams({
       testId,
       title: testTitle,

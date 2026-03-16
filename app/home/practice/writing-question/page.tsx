@@ -119,41 +119,37 @@ function WritingQuestionContent() {
 
   return (
     <div className="pb-24 lg:pb-8">
-      {/* Header */}
-      <div className="bg-primary rounded-b-2xl px-4 py-4 mb-6">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowExitDialog(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-            <ArrowLeft className="w-5 h-5 text-white" />
+          <button onClick={() => setShowExitDialog(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
-          <span className="text-lg font-semibold text-white">Câu {currentIndex + 1}</span>
-          <div className="flex-1" />
-          <span className="text-sm text-white/70">Giải thích</span>
-        </div>
-        {/* Progress */}
-        <div className="w-full h-1.5 bg-white/30 rounded-full mt-3 overflow-hidden">
-          <div
-            className="h-full bg-white/80 rounded-full transition-all duration-300"
-            style={{ width: `${((currentIndex + 1) / prompts.length) * 100}%` }}
-          />
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">{partTitle}</h2>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
+      <div className="w-full h-1.5 bg-slate-100 rounded-full mb-6 overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-300"
+          style={{ width: `${((currentIndex + 1) / prompts.length) * 100}%` }}
+        />
+      </div>
+
       <div className="px-4 lg:px-0">
-        {/* Section title */}
         <h2 className="text-2xl font-bold text-slate-800 mb-4">{getSectionTitle(currentPrompt)}</h2>
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Left: Prompt content */}
           <div className="space-y-4">
-            {/* Image (Part 1) */}
             {currentPrompt.image_url && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden max-w-xl mx-auto border border-slate-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={currentPrompt.image_url}
                   alt={currentPrompt.title || 'Hình ảnh'}
-                  className="w-full h-56 object-cover"
+                  className="w-full h-44 md:h-52 object-cover"
                 />
                 {currentPrompt.title && (
                   <p className="text-center text-sm text-slate-500 py-2">{currentPrompt.title}</p>

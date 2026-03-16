@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { signIn, signInWithGoogle } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
@@ -47,8 +48,8 @@ function LoginContent() {
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-teal-50 via-white to-slate-50">
       <div className="w-full max-w-md mx-auto px-6 py-12">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-primary to-primary-dark mx-auto flex items-center justify-center mb-4 shadow-md">
-            <span className="text-white font-bold text-xl">L</span>
+          <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 shadow-md border border-slate-200">
+            <Image src="/lexii.jpg" alt="Lexii logo" width={64} height={64} className="w-full h-full object-cover" priority />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-1">Đăng nhập</h1>
           <p className="text-slate-500 text-sm">Chào mừng bạn quay lại Lexii</p>

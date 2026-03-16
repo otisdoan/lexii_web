@@ -10,10 +10,10 @@ import {
   Sparkles,
   Crown,
   Settings,
-  Bell,
   Flame,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import NotificationBell from '@/components/notifications/notification-bell';
 
 interface UserInfo {
   name: string;
@@ -70,8 +70,9 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 fixed h-full z-30">
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-primary to-primary-dark flex items-center justify-center">
-            <span className="text-white font-bold text-lg">L</span>
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/lexii.jpg" alt="Lexii logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900">Lexii</h1>
@@ -85,7 +86,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             const Icon = item.icon;
             const isActive = pathname === item.href ||
               (item.href !== '/home' && pathname.startsWith(item.href));
-            const isPracticeActive = item.href === '/home' && pathname === '/home';
+            const isPracticeActive = item.href === '/home' && (pathname === '/home' || pathname.startsWith('/home/practice'));
 
             return (
               <Link
@@ -145,8 +146,9 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
             {/* Mobile logo */}
             <div className="flex items-center gap-3 lg:hidden">
-              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-primary to-primary-dark flex items-center justify-center">
-                <span className="text-white font-bold text-sm">L</span>
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/lexii.jpg" alt="Lexii logo" className="w-full h-full object-cover" />
               </div>
               <span className="font-bold text-slate-900">Lexii</span>
             </div>
@@ -165,32 +167,39 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
                 <Flame className="w-4 h-4 text-amber-600" />
                 <span className="text-sm font-semibold text-amber-600">0</span>
               </div>
-              <button className="relative p-2 rounded-full hover:bg-slate-100 transition-colors">
-                <Bell className="w-5 h-5 text-slate-500" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
+              <NotificationBell notificationsPageHref="/home/notifications" />
               <Link href="/home/settings/profile" className="block">
                 <div className="relative">
-                  <div className={isPremium ? 'p-1 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.25)]' : ''}>
-                    {userInfo?.avatar ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={userInfo.avatar}
-                        alt="avatar"
-                        className={`w-9 h-9 rounded-full object-cover transition-all ${
-                          isPremium
-                            ? 'border-2 border-white'
-                            : 'ring-2 ring-primary/20 hover:ring-primary/50'
-                        }`}
-                      />
-                    ) : (
-                      <div className={`w-9 h-9 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity ${
-                        isPremium ? 'border-2 border-white' : ''
-                      }`}>
-                        {userInfo?.name?.[0]?.toUpperCase() || 'U'}
+                  {isPremium ? (
+                    <div className="relative w-11 h-11">
+                      <div className="absolute inset-0 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.25)]" />
+                      <div className="absolute inset-0.5 rounded-full overflow-hidden ring-2 ring-white bg-white">
+                        {userInfo?.avatar ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={userInfo.avatar}
+                            alt="avatar"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-white font-semibold text-sm">
+                            {userInfo?.name?.[0]?.toUpperCase() || 'U'}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : userInfo?.avatar ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={userInfo.avatar}
+                      alt="avatar"
+                      className="w-9 h-9 rounded-full object-cover transition-all ring-2 ring-primary/20 hover:ring-primary/50"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity">
+                      {userInfo?.name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                  )}
                   {isPremium && (
                     <span className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full bg-amber-500 border border-white flex items-center justify-center shadow-sm">
                       <Crown className="w-2.5 h-2.5 text-white" />
@@ -215,7 +224,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             const Icon = item.icon;
             const isActive = pathname === item.href ||
               (item.href !== '/home' && pathname.startsWith(item.href));
-            const isPracticeActive = item.href === '/home' && pathname === '/home';
+            const isPracticeActive = item.href === '/home' && (pathname === '/home' || pathname.startsWith('/home/practice'));
 
             return (
               <Link

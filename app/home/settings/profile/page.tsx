@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Camera, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getUserProfile, updateUserProfile, getUserStats } from '@/lib/api';
+import { getCurrentUserPremiumSubscriptionInfo, getUserProfile, updateUserProfile, getUserStats } from '@/lib/api';
 
 interface ProfileData {
   id: string;
@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [premiumInfo, setPremiumInfo] = useState<{ startedAt: string | null; expiresAt: string | null; isLifetime: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -48,10 +49,23 @@ export default function ProfilePage() {
         setPhone(p.phone || '');
         setAvatarUrl(p.avatar_url || user.user_metadata?.avatar_url || '');
         setStats(s);
+        if (p.role === 'premium') {
+          const subscriptionInfo = await getCurrentUserPremiumSubscriptionInfo().catch(() => null);
+          setPremiumInfo(subscriptionInfo
+            ? {
+                startedAt: subscriptionInfo.startedAt,
+                expiresAt: subscriptionInfo.expiresAt,
+                isLifetime: subscriptionInfo.isLifetime,
+              }
+            : null);
+        } else {
+          setPremiumInfo(null);
+        }
       } catch {
         // Profile may not exist yet, fall back to auth metadata
         setFullName(user.user_metadata?.full_name || user.user_metadata?.name || '');
         setAvatarUrl(user.user_metadata?.avatar_url || '');
+        setPremiumInfo(null);
       } finally {
         setLoading(false);
       }
@@ -121,6 +135,13 @@ export default function ProfilePage() {
   };
 
   const displayInitial = (fullName || email || 'U')[0].toUpperCase();
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   if (loading) {
     return (
@@ -241,9 +262,15 @@ export default function ProfilePage() {
                     Miễn phí
                   </span>
                 ) : (
-                  <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                    Đã kích hoạt
-                  </span>
+                  <div className="space-y-2">
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                      Đã kích hoạt
+                    </span>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>Bắt đầu: {formatDate(premiumInfo?.startedAt)}</p>
+                      <p>Hết hạn: {premiumInfo?.isLifetime ? 'Trọn đời' : formatDate(premiumInfo?.expiresAt)}</p>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
