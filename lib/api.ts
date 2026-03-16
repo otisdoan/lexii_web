@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TestModel, QuestionModel, TestPartModel, VocabularyModel, GrammarModel, WritingPromptModel } from './types';
+import type { TestModel, QuestionModel, TestPartModel, VocabularyModel, GrammarModel, WritingPromptModel, RoadmapTemplateModel, RoadmapTaskModel, UserRoadmapModel, UserTaskProgressModel, SelfAssessedLevel } from './types';
 
 // ========== Test Repository ==========
 export async function getFullTests(): Promise<TestModel[]> {
@@ -103,6 +103,38 @@ export async function getQuestionsByPartId(partId: string, limit?: number): Prom
     media: (q.question_media || []) as unknown as QuestionModel['media'],
     passage: (q.passages || null) as unknown as QuestionModel['passage'],
   })) as QuestionModel[];
+}
+
+// ========== Placement Test (for Roadmap) ==========
+// 15 câu rải đều 7 Parts từ một đề full test (vd TEST 1 - ETS 2023):
+// Listening (8): Part 1 (2), Part 2 (2), Part 3 (2), Part 4 (2)
+// Reading (7):  Part 5 (2), Part 6 (2), Part 7 (3)
+const PLACEMENT_PER_PART = [2, 2, 2, 2, 2, 2, 3] as const; // Part 1..7
+
+export async function getPlacementTestId(): Promise<string | null> {
+  const fullTests = await getFullTests();
+  if (!fullTests.length) return null;
+  const preferred = fullTests.find(
+    (t) => /TEST\s*1|ETS\s*2023/i.test(t.title || '')
+  );
+  return (preferred ?? fullTests[0]).id;
+}
+
+export async function getPlacementQuestions(_level?: SelfAssessedLevel): Promise<QuestionModel[]> {
+  const testId = await getPlacementTestId();
+  if (!testId) return [];
+  const parts = await getTestParts(testId);
+  if (!parts.length) return [];
+  const orderedParts = [...parts].sort((a, b) => a.part_number - b.part_number);
+  const result: QuestionModel[] = [];
+  for (let i = 0; i < 7; i++) {
+    const part = orderedParts.find((p) => p.part_number === i + 1);
+    if (!part) continue;
+    const limit = PLACEMENT_PER_PART[i];
+    const questions = await getQuestionsByPartId(part.id, limit);
+    result.push(...questions);
+  }
+  return result.slice(0, 15);
 }
 
 export async function submitAttempt(
@@ -272,4 +304,109 @@ export async function getUserStats(userId: string) {
   const bestScore = totalTests > 0 ? Math.max(...attempts.map((a: { score: number }) => a.score)) : 0;
   const avgScore = totalTests > 0 ? Math.round(attempts.reduce((s: number, a: { score: number }) => s + a.score, 0) / totalTests) : 0;
   return { totalTests, bestScore, avgScore };
+}
+
+// ========== Roadmap ==========
+export async function getRoadmapTemplates(): Promise<RoadmapTemplateModel[]> {
+  const { data, error } = await supabase
+    .from('roadmap_templates')
+    .select('*')
+    .order('target_score', { ascending: true })
+    .order('duration_days', { ascending: true });
+  if (error) throw error;
+  return (data || []) as RoadmapTemplateModel[];
+}
+
+export async function getRoadmapTemplateByTargetAndDuration(
+  targetScore: number,
+  durationDays: number
+): Promise<RoadmapTemplateModel | null> {
+  const { data, error } = await supabase
+    .from('roadmap_templates')
+    .select('*')
+    .eq('target_score', targetScore)
+    .eq('duration_days', durationDays)
+    .maybeSingle();
+  if (error) throw error;
+  return data as RoadmapTemplateModel | null;
+}
+
+export async function getRoadmapTasks(templateId: string): Promise<RoadmapTaskModel[]> {
+  const { data, error } = await supabase
+    .from('roadmap_tasks')
+    .select('*')
+    .eq('template_id', templateId)
+    .order('day_number');
+  if (error) throw error;
+  return (data || []) as RoadmapTaskModel[];
+}
+
+export async function createUserRoadmap(
+  userId: string,
+  templateId: string,
+  initialScore: number,
+  targetScore: number
+): Promise<UserRoadmapModel> {
+  const { data, error } = await supabase
+    .from('user_roadmaps')
+    .insert({
+      user_id: userId,
+      template_id: templateId,
+      initial_score: initialScore,
+      target_score: targetScore,
+      current_day: 1,
+      status: 'active',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as UserRoadmapModel;
+}
+
+export async function getActiveUserRoadmap(userId: string): Promise<UserRoadmapModel | null> {
+  const { data, error } = await supabase
+    .from('user_roadmaps')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data as UserRoadmapModel | null;
+}
+
+export async function getRoadmapById(roadmapId: string): Promise<UserRoadmapModel | null> {
+  const { data, error } = await supabase
+    .from('user_roadmaps')
+    .select('*')
+    .eq('id', roadmapId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as UserRoadmapModel | null;
+}
+
+export async function getUserTaskProgress(userRoadmapId: string): Promise<UserTaskProgressModel[]> {
+  const { data, error } = await supabase
+    .from('user_task_progress')
+    .select('*')
+    .eq('user_roadmap_id', userRoadmapId);
+  if (error) throw error;
+  return (data || []) as UserTaskProgressModel[];
+}
+
+export async function updateUserRoadmapCurrentDay(userRoadmapId: string, currentDay: number) {
+  const { error } = await supabase
+    .from('user_roadmaps')
+    .update({ current_day: currentDay })
+    .eq('id', userRoadmapId);
+  if (error) throw error;
+}
+
+export async function dropUserRoadmap(userRoadmapId: string) {
+  const { error } = await supabase
+    .from('user_roadmaps')
+    .update({ status: 'dropped' })
+    .eq('id', userRoadmapId);
+  if (error) throw error;
 }
