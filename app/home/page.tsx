@@ -16,8 +16,9 @@ import {
   Star,
   FileText,
   HelpCircle,
+  Lock,
 } from 'lucide-react';
-import { getFullTests, getMiniTests } from '@/lib/api';
+import { getCurrentUserRole, getFullTests, getMiniTests } from '@/lib/api';
 import type { TestModel } from '@/lib/types';
 
 const skills = [
@@ -63,13 +64,15 @@ export default function HomePage() {
   const [fullTests, setFullTests] = useState<TestModel[]>([]);
   const [miniTests, setMiniTests] = useState<TestModel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const [ft, mt] = await Promise.all([getFullTests(), getMiniTests()]);
+        const [ft, mt, role] = await Promise.all([getFullTests(), getMiniTests(), getCurrentUserRole()]);
         setFullTests(ft);
         setMiniTests(mt);
+        setIsPremiumUser(role === 'premium' || role === 'admin');
       } catch {
         // Silently handle - will show empty state
       } finally {
@@ -82,7 +85,7 @@ export default function HomePage() {
   return (
     <div className="space-y-8 pb-20 lg:pb-8">
       {/* Promo Banner */}
-      <div className="bg-gradient-to-r from-primary to-teal-500 rounded-2xl p-6 text-white relative overflow-hidden">
+      <div className="bg-linear-to-r from-primary to-teal-500 rounded-2xl p-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
         <div className="absolute bottom-0 right-12 w-20 h-20 bg-white/10 rounded-full translate-y-6" />
         <div className="relative">
@@ -107,17 +110,18 @@ export default function HomePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {skills.map(skill => {
             const Icon = skill.icon;
+            const isLocked = (skill.title === 'Speaking' || skill.title === 'Writing') && !isPremiumUser;
             return (
               <Link
                 key={skill.title}
-                href={skill.href}
+                href={isLocked ? '/home/upgrade' : skill.href}
                 className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
               >
                 <div className={`w-12 h-12 ${skill.bgColor} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                   <Icon className={`w-6 h-6 ${skill.textColor}`} />
                 </div>
                 <h4 className="font-semibold text-slate-800 text-sm">{skill.title}</h4>
-                <p className="text-xs text-slate-500 mt-0.5">{skill.subtitle}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{isLocked ? 'Premium' : skill.subtitle}</p>
               </Link>
             );
           })}
@@ -146,7 +150,9 @@ export default function HomePage() {
               fullTests.slice(0, 4).map(test => (
                 <Link
                   key={test.id}
-                  href={`/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}`}
+                  href={test.is_premium && !isPremiumUser
+                    ? '/home/upgrade'
+                    : `/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}&isPremium=${test.is_premium ? '1' : '0'}`}
                   className="flex items-center gap-4 bg-white rounded-xl border border-slate-100 p-4 hover:shadow-sm hover:border-primary/20 transition-all group"
                 >
                   <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-teal-100 transition-colors">
@@ -159,8 +165,10 @@ export default function HomePage() {
                       <span className="flex items-center gap-1"><HelpCircle className="w-3.5 h-3.5" />{test.total_questions} câu</span>
                     </div>
                   </div>
-                  {test.is_premium && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">PRO</span>
+                  {test.is_premium && !isPremiumUser && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Premium
+                    </span>
                   )}
                 </Link>
               ))
@@ -171,7 +179,7 @@ export default function HomePage() {
               </div>
             )}
           </div>
-        </section>
+        </section>  
 
         {/* Mini Tests */}
         <section>
@@ -193,7 +201,9 @@ export default function HomePage() {
               miniTests.slice(0, 4).map(test => (
                 <Link
                   key={test.id}
-                  href={`/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}`}
+                  href={test.is_premium && !isPremiumUser
+                    ? '/home/upgrade'
+                    : `/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}&isPremium=${test.is_premium ? '1' : '0'}`}
                   className="flex items-center gap-4 bg-white rounded-xl border border-slate-100 p-4 hover:shadow-sm hover:border-primary/20 transition-all group"
                 >
                   <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">

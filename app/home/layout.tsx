@@ -7,7 +7,7 @@ import {
   BookOpen,
   GraduationCap,
   BookMarked,
-  Map,
+  Sparkles,
   Crown,
   Settings,
   Bell,
@@ -18,31 +18,51 @@ import { supabase } from '@/lib/supabase';
 interface UserInfo {
   name: string;
   avatar?: string;
+  role?: string;
+  premiumExpiresAt?: string | null;
 }
 
 const navItems = [
   { href: '/home', label: 'Luyện tập', icon: BookOpen },
   { href: '/home/exam', label: 'Thi', icon: GraduationCap },
   { href: '/home/theory', label: 'Lý thuyết', icon: BookMarked },
-  { href: '/home/roadmap', label: 'Lộ trình', icon: Map },
-  { href: '/home/upgrade', label: 'Nâng cấp', icon: Crown },
+  { href: '/home/upgrade', label: 'Nâng cấp', icon: Sparkles },
   { href: '/home/settings', label: 'Cài đặt', icon: Settings },
 ];
 
 export default function HomeLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [nowTs] = useState(() => Date.now());
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserInfo({
-          name: (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || user.email?.split('@')[0] || 'U',
-          avatar: user.user_metadata?.avatar_url as string | undefined,
-        });
-      }
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, avatar_url, premium_expires_at')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      setUserInfo({
+        name: (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || user.email?.split('@')[0] || 'U',
+        avatar: (profile?.avatar_url as string | undefined) || (user.user_metadata?.avatar_url as string | undefined),
+        role: (profile?.role as string | undefined) || 'user',
+        premiumExpiresAt: (profile?.premium_expires_at as string | null | undefined) ?? null,
+      });
     });
   }, []);
+
+  const isPremium = userInfo?.role === 'premium';
+  const premiumExpiryDate = userInfo?.premiumExpiresAt ? new Date(userInfo.premiumExpiresAt) : null;
+  const isLifetime = isPremium && !premiumExpiryDate;
+  const remainingDays = premiumExpiryDate
+    ? Math.max(0, Math.ceil((premiumExpiryDate.getTime() - nowTs) / (1000 * 60 * 60 * 24)))
+    : null;
+  const premiumExpiryLabel = premiumExpiryDate
+    ? premiumExpiryDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : null;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -50,7 +70,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 fixed h-full z-30">
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-primary to-primary-dark flex items-center justify-center">
             <span className="text-white font-bold text-lg">L</span>
           </div>
           <div>
@@ -86,16 +106,35 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
 
         {/* Bottom */}
         <div className="p-4 border-t border-slate-100">
-          <div className="bg-gradient-to-r from-primary to-teal-500 rounded-2xl p-4 text-white">
-            <p className="font-semibold text-sm mb-1">Nâng cấp Premium</p>
-            <p className="text-xs text-teal-100 mb-3">Truy cập toàn bộ nội dung</p>
-            <Link
-              href="/home/upgrade"
-              className="block text-center py-2 bg-white text-primary rounded-lg text-sm font-semibold hover:bg-teal-50 transition-colors"
-            >
-              Nâng cấp ngay
-            </Link>
-          </div>
+          {isPremium ? (
+            <div className="bg-linear-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 text-white">
+              <p className="font-semibold text-sm mb-1">Gói của bạn đang hoạt động</p>
+              <p className="text-xs text-emerald-100 mb-3">
+                {isLifetime
+                  ? 'Gói trọn đời đang hiệu lực'
+                  : remainingDays !== null
+                    ? `Còn ${remainingDays} ngày (${premiumExpiryLabel})`
+                    : 'Đang cập nhật thời hạn gói'}
+              </p>
+              <Link
+                href="/home/settings/profile"
+                className="block text-center py-2 bg-white text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-50 transition-colors"
+              >
+                Xem chi tiết gói
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-linear-to-r from-primary to-teal-500 rounded-2xl p-4 text-white">
+              <p className="font-semibold text-sm mb-1">Nâng cấp gói</p>
+              <p className="text-xs text-teal-100 mb-3">Truy cập toàn bộ nội dung</p>
+              <Link
+                href="/home/upgrade"
+                className="block text-center py-2 bg-white text-primary rounded-lg text-sm font-semibold hover:bg-teal-50 transition-colors"
+              >
+                Nâng cấp ngay
+              </Link>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -106,7 +145,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
             {/* Mobile logo */}
             <div className="flex items-center gap-3 lg:hidden">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-primary to-primary-dark flex items-center justify-center">
                 <span className="text-white font-bold text-sm">L</span>
               </div>
               <span className="font-bold text-slate-900">Lexii</span>
@@ -131,18 +170,33 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
               </button>
               <Link href="/home/settings/profile" className="block">
-                {userInfo?.avatar ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={userInfo.avatar}
-                    alt="avatar"
-                    className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20 hover:ring-primary/50 transition-all"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-teal-400 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity">
-                    {userInfo?.name?.[0]?.toUpperCase() || 'U'}
+                <div className="relative">
+                  <div className={isPremium ? 'p-1 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.25)]' : ''}>
+                    {userInfo?.avatar ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={userInfo.avatar}
+                        alt="avatar"
+                        className={`w-9 h-9 rounded-full object-cover transition-all ${
+                          isPremium
+                            ? 'border-2 border-white'
+                            : 'ring-2 ring-primary/20 hover:ring-primary/50'
+                        }`}
+                      />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity ${
+                        isPremium ? 'border-2 border-white' : ''
+                      }`}>
+                        {userInfo?.name?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
                   </div>
-                )}
+                  {isPremium && (
+                    <span className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full bg-amber-500 border border-white flex items-center justify-center shadow-sm">
+                      <Crown className="w-2.5 h-2.5 text-white" />
+                    </span>
+                  )}
+                </div>
               </Link>
             </div>
           </div>

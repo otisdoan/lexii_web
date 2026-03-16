@@ -144,18 +144,20 @@ export default function ProfilePage() {
         {/* Avatar section */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
-            {avatarUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={avatarUrl}
-                alt="avatar"
-                className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-lg"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-3xl font-bold text-white ring-4 ring-white shadow-lg">
-                {displayInitial}
-              </div>
-            )}
+            <div className={profile?.role === 'premium' ? 'p-1.5 rounded-full premium-avatar-ring shadow-[0_0_0_4px_rgba(251,191,36,0.18)]' : ''}>
+              {avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatarUrl}
+                  alt="avatar"
+                  className={`w-24 h-24 rounded-full object-cover shadow-lg ${profile?.role === 'premium' ? 'border-4 border-white' : 'ring-4 ring-white'}`}
+                />
+              ) : (
+                <div className={`w-24 h-24 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-3xl font-bold text-white shadow-lg ${profile?.role === 'premium' ? 'border-4 border-white' : 'ring-4 ring-white'}`}>
+                  {displayInitial}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-md border-2 border-white hover:bg-primary/90 transition-colors"
@@ -234,13 +236,15 @@ export default function ProfilePage() {
             {profile?.role && (
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">Vai trò</label>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                  profile.role === 'premium'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {profile.role === 'premium' ? '⭐ Premium' : 'Miễn phí'}
-                </span>
+                {profile.role !== 'premium' ? (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                    Miễn phí
+                  </span>
+                ) : (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                    Đã kích hoạt
+                  </span>
+                )}
               </div>
             )}
           </div>

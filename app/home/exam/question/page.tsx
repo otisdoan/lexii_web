@@ -13,8 +13,20 @@ import {
   Send,
   Volume2,
   X,
+  Lock,
 } from 'lucide-react';
-import { getQuestionsByTestId, getTestParts } from '@/lib/api';
+import {
+  getCurrentUser,
+  getCurrentUserRole,
+  getQuestionsByIds,
+  getQuestionsByReadingPartNumber,
+  getQuestionsByPartId,
+  getQuestionsByTestId,
+  getTestById,
+  getTestParts,
+  saveListeningPracticeTracking,
+  submitAttempt,
+} from '@/lib/api';
 import type { QuestionModel, TestPartModel } from '@/lib/types';
 
 function ExamQuestionContent() {
@@ -22,6 +34,11 @@ function ExamQuestionContent() {
   const router = useRouter();
   const testId = searchParams.get('testId') || '';
   const testTitle = searchParams.get('title') || 'Test';
+  const practiceMode = searchParams.get('practice') === 'true';
+  const partId = searchParams.get('partId') || '';
+  const partNumber = parseInt(searchParams.get('partNumber') || '0', 10);
+  const source = searchParams.get('source') || '';
+  const questionLimit = parseInt(searchParams.get('questionLimit') || '0', 10);
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [parts, setParts] = useState<TestPartModel[]>([]);
@@ -31,6 +48,7 @@ function ExamQuestionContent() {
   const [timeLeft, setTimeLeft] = useState(120 * 60); // 120 min
   const [showOverview, setShowOverview] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -40,11 +58,48 @@ function ExamQuestionContent() {
   useEffect(() => {
     async function load() {
       try {
-        const [qs, ps] = await Promise.all([
-          getQuestionsByTestId(testId),
+        let loadedQuestions: QuestionModel[] = [];
+        if (practiceMode && source === 'wrong') {
+          let wrongIds: string[] = [];
+          if (typeof window !== 'undefined') {
+            const raw = sessionStorage.getItem('practice_wrong_question_ids');
+            if (raw) {
+              try {
+                wrongIds = JSON.parse(raw) as string[];
+              } catch {
+                wrongIds = [];
+              }
+            }
+          }
+          loadedQuestions = await getQuestionsByIds(wrongIds);
+        } else if (practiceMode && partNumber >= 5) {
+          loadedQuestions = await getQuestionsByReadingPartNumber(
+            partNumber,
+            questionLimit > 0 ? questionLimit : undefined,
+          );
+        } else if (practiceMode && partId) {
+          loadedQuestions = await getQuestionsByPartId(
+            partId,
+            questionLimit > 0 ? questionLimit : undefined,
+          );
+        } else {
+          loadedQuestions = await getQuestionsByTestId(testId);
+        }
+
+        const [ps, test, role] = await Promise.all([
           getTestParts(testId),
+          getTestById(testId),
+          getCurrentUserRole(),
         ]);
-        setQuestions(qs);
+
+        const premiumUser = role === 'premium' || role === 'admin';
+        const blockedByTest = Boolean(test?.is_premium) && !premiumUser;
+        if (blockedByTest) {
+          setHasAccess(false);
+          return;
+        }
+
+        setQuestions(loadedQuestions);
         setParts(ps);
       } catch {
         //
@@ -53,10 +108,11 @@ function ExamQuestionContent() {
       }
     }
     if (testId) load();
-  }, [testId]);
+  }, [partId, partNumber, practiceMode, questionLimit, source, testId]);
 
   // Timer
   useEffect(() => {
+    if (practiceMode) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 0) {
@@ -69,7 +125,7 @@ function ExamQuestionContent() {
     }, 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [practiceMode]);
 
   // Audio progress
   useEffect(() => {
@@ -167,7 +223,53 @@ function ExamQuestionContent() {
     return { listeningScore, readingScore, totalCorrect: listeningCorrect + readingCorrect };
   }, [questions, parts, userAnswers]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
+    if (practiceMode) {
+      let correct = 0;
+      const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
+      questions.forEach((q, i) => {
+        const selectedIdx = userAnswers[i];
+        if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
+        const selected = q.options[selectedIdx];
+        if (selected?.is_correct) correct += 1;
+        answerRows.push({
+          question_id: q.id,
+          option_id: selected.id,
+          is_correct: Boolean(selected.is_correct),
+        });
+      });
+
+      const user = await getCurrentUser();
+      if (user && answerRows.length > 0) {
+        try {
+          await submitAttempt(user.id, testId, correct, answerRows);
+          await saveListeningPracticeTracking(questions, userAnswers);
+        } catch {
+          // keep UX smooth even when saving fails
+        }
+      }
+
+      const params = new URLSearchParams({
+        testId,
+        title: testTitle,
+        correct: String(correct),
+        total: String(questions.length),
+        section: partNumber >= 5 ? 'reading' : 'listening',
+        practice: 'true',
+        source,
+      });
+      if (partId) params.set('partId', partId);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
+        sessionStorage.setItem(
+          'practice_question_ids',
+          JSON.stringify(questions.map((q) => q.id)),
+        );
+      }
+      router.push(`/home/practice/result?${params.toString()}`);
+      return;
+    }
+
     const { listeningScore, readingScore, totalCorrect } = calculateScores();
     const params = new URLSearchParams({
       testId,
@@ -182,7 +284,7 @@ function ExamQuestionContent() {
       sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
     }
     router.push(`/home/exam/score?${params.toString()}`);
-  }, [calculateScores, testId, testTitle, questions.length, userAnswers, router]);
+  }, [calculateScores, partId, partNumber, practiceMode, questions, router, source, testId, testTitle, userAnswers]);
 
   if (loading) {
     return (
@@ -190,6 +292,24 @@ function ExamQuestionContent() {
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
           <p className="text-slate-500 text-sm">Đang tải đề thi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="bg-white border border-amber-200 rounded-2xl p-6 text-center max-w-md">
+          <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-800 mb-1">Nội dung Premium</h3>
+          <p className="text-sm text-slate-500 mb-4">Tài khoản hiện tại chưa có quyền truy cập bài thi này.</p>
+          <button
+            onClick={() => router.push('/home/upgrade')}
+            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+          >
+            Nâng cấp Premium
+          </button>
         </div>
       </div>
     );
@@ -212,7 +332,7 @@ function ExamQuestionContent() {
     <div className="pb-20 lg:pb-8">
       {/* Header */}
      <div className='sm:px-10'>
-       <div className="sticky top-[80px] z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
+      <div className="sticky top-20 z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -239,7 +359,7 @@ function ExamQuestionContent() {
               timeLeft < 300 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-700'
             }`}>
               <Clock className="w-4 h-4" />
-              {formatTime(timeLeft)}
+              {practiceMode ? 'Practice' : formatTime(timeLeft)}
             </div>
 
             {/* Overview */}
@@ -316,7 +436,8 @@ function ExamQuestionContent() {
           {/* Image */}
           {imageUrl && (
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
-              <img src={imageUrl} alt="Question" className="w-full rounded-xl" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="Question" className="w-full rounded-xl h-auto" />
             </div>
           )}
 
@@ -324,7 +445,7 @@ function ExamQuestionContent() {
           {currentQuestion?.passage && (
             <div className="bg-white rounded-2xl border border-slate-100 p-6">
               <h4 className="font-semibold text-slate-800 mb-3">{currentQuestion.passage.title}</h4>
-              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-100 overflow-y-auto">
                 {currentQuestion.passage.content}
               </div>
             </div>
@@ -413,7 +534,7 @@ function ExamQuestionContent() {
       {showOverview && (
         <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowOverview(false)} />
-          <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full lg:w-[480px] max-h-[80vh] overflow-auto p-6">
+          <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full lg:w-120 max-h-[80vh] overflow-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-800">Tổng quan ({answeredCount}/{questions.length})</h3>
               <button onClick={() => setShowOverview(false)} className="p-1 hover:bg-slate-100 rounded-xl">

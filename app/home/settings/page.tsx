@@ -21,18 +21,26 @@ interface SettingsItem {
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; email: string; avatar?: string } | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [stats, setStats] = useState<{ totalTests: number; bestScore: number } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
+    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       if (u) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, avatar_url')
+          .eq('id', u.id)
+          .maybeSingle();
+
         setUser({
           name: (u.user_metadata?.full_name as string) || (u.user_metadata?.name as string) || u.email?.split('@')[0] || 'Người dùng',
           email: u.email || '',
-          avatar: u.user_metadata?.avatar_url as string | undefined,
+          avatar: (profile?.avatar_url as string | undefined) || (u.user_metadata?.avatar_url as string | undefined),
         });
+        setIsPremium(profile?.role === 'premium');
         getUserStats(u.id).then(s => setStats(s)).catch(() => {});
       }
     });
@@ -59,7 +67,7 @@ export default function SettingsPage() {
       trailing: (
         <label className="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" checked={darkMode} onChange={e => setDarkMode(e.target.checked)} className="sr-only peer" />
-          <div className="w-11 h-6 bg-slate-200 peer-checked:bg-primary rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+          <div className="w-11 h-6 bg-slate-200 peer-checked:bg-primary rounded-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
         </label>
       ),
       showChevron: false,
@@ -91,17 +99,26 @@ export default function SettingsPage() {
         {/* Profile section */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-4 mb-3">
-            {user?.avatar ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={user.avatar} alt="avatar" className="w-14 h-14 rounded-full object-cover" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-teal-100 flex items-center justify-center text-xl font-bold text-primary">
-                {user?.name?.[0]?.toUpperCase() || 'U'}
+            <div className="relative">
+              <div className={isPremium ? 'p-1 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.2)]' : ''}>
+                {user?.avatar ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={user.avatar}
+                    alt="avatar"
+                    className={`w-14 h-14 rounded-full object-cover ${isPremium ? 'border-2 border-white' : ''}`}
+                  />
+                ) : (
+                  <div className={`w-14 h-14 rounded-full bg-teal-100 flex items-center justify-center text-xl font-bold text-primary ${isPremium ? 'border-2 border-white' : ''}`}>
+                    {user?.name?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-slate-800 truncate">{user?.name || 'Người dùng'}</p>
               {user?.email && <p className="text-xs text-slate-500 truncate">{user.email}</p>}
+              {isPremium && <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Thành viên đã kích hoạt</p>}
               <Link href="/home/settings/profile" className="inline-block mt-1 text-xs text-primary font-medium hover:underline">
                 Chỉnh sửa hồ sơ →
               </Link>

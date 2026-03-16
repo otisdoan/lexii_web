@@ -2,14 +2,14 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ArrowLeft, Info, X, ChevronRight } from 'lucide-react';
-import { getWritingPrompts } from '@/lib/api';
+import { ArrowLeft, Info, X, ChevronRight, Lock } from 'lucide-react';
+import { getCurrentUserRole, getWritingPrompts } from '@/lib/api';
 import type { WritingPromptModel } from '@/lib/types';
 
 function WritingQuestionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const partNumber = parseInt(searchParams.get('part') || '1');
+  const partNumber = parseInt(searchParams.get('partNumber') || searchParams.get('part') || '1');
   const partTitle = searchParams.get('title') || 'Writing';
 
   const [prompts, setPrompts] = useState<WritingPromptModel[]>([]);
@@ -17,11 +17,19 @@ function WritingQuestionContent() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
+        const role = await getCurrentUserRole();
+        const premiumUser = role === 'premium' || role === 'admin';
+        if (!premiumUser) {
+          setHasAccess(false);
+          return;
+        }
+
         const data = await getWritingPrompts(partNumber);
         setPrompts(data);
       } catch {
@@ -32,6 +40,24 @@ function WritingQuestionContent() {
     }
     load();
   }, [partNumber]);
+
+  if (!loading && !hasAccess) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="bg-white border border-amber-200 rounded-2xl p-6 text-center max-w-md mx-4">
+          <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-800 mb-1">Tính năng Premium</h3>
+          <p className="text-sm text-slate-500 mb-4">Writing Practice chỉ dành cho tài khoản Premium.</p>
+          <button
+            onClick={() => router.push('/home/upgrade')}
+            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+          >
+            Nâng cấp Premium
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const currentPrompt = prompts[currentIndex];
   const currentAnswer = currentPrompt ? (answers[currentPrompt.id] || '') : '';

@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle, XCircle, Volume2, Play, Pause } from 'lucide-react';
-import { getQuestionsByPartId, getQuestionsByTestId } from '@/lib/api';
+import { getQuestionsByIds, getQuestionsByPartId, getQuestionsByTestId } from '@/lib/api';
 import type { QuestionModel } from '@/lib/types';
 
 function AnswerReviewContent() {
@@ -12,7 +12,7 @@ function AnswerReviewContent() {
   const testId = searchParams.get('testId') || '';
   const testTitle = searchParams.get('title') || 'Test';
   const partId = searchParams.get('partId');
-  const section = searchParams.get('section') || 'listening';
+  const practiceMode = searchParams.get('practice') === 'true';
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [allQuestions, setAllQuestions] = useState<QuestionModel[]>([]);
@@ -24,12 +24,29 @@ function AnswerReviewContent() {
   useEffect(() => {
     async function load() {
       try {
-        const all = await getQuestionsByTestId(testId);
-        setAllQuestions(all);
+        let all: QuestionModel[] = [];
+        let qs: QuestionModel[] = [];
 
-        const qs = partId
-          ? await getQuestionsByPartId(partId)
-          : all;
+        if (practiceMode) {
+          let practiceIds: string[] = [];
+          const rawPracticeIds = sessionStorage.getItem('practice_question_ids');
+          if (rawPracticeIds) {
+            try {
+              practiceIds = JSON.parse(rawPracticeIds);
+            } catch {
+              practiceIds = [];
+            }
+          }
+          qs = practiceIds.length ? await getQuestionsByIds(practiceIds) : [];
+          all = qs;
+        } else {
+          all = await getQuestionsByTestId(testId);
+          qs = partId
+            ? await getQuestionsByPartId(partId)
+            : all;
+        }
+
+        setAllQuestions(all);
         setQuestions(qs);
 
         const stored = sessionStorage.getItem('exam_answers');
@@ -41,12 +58,19 @@ function AnswerReviewContent() {
       }
     }
     if (testId) load();
-  }, [testId, partId]);
+  }, [testId, partId, practiceMode]);
 
   const getGlobalIndex = (q: QuestionModel) => allQuestions.findIndex(aq => aq.id === q.id);
 
+  const answerIndexFor = (q: QuestionModel) => {
+    if (practiceMode) {
+      return questions.findIndex((qq) => qq.id === q.id);
+    }
+    return getGlobalIndex(q);
+  };
+
   const isCorrect = (q: QuestionModel) => {
-    const idx = getGlobalIndex(q);
+    const idx = answerIndexFor(q);
     if (userAnswers[idx] === undefined) return false;
     return q.options[userAnswers[idx]]?.is_correct ?? false;
   };
@@ -112,13 +136,15 @@ function AnswerReviewContent() {
       {/* Question list */}
       <div className="space-y-3">
         {filtered.map((q) => {
-          const globalIdx = getGlobalIndex(q);
+          const answerIdx = answerIndexFor(q);
+          const displayNumber = answerIdx + 1;
           const correct = isCorrect(q);
-          const userOptionIdx = userAnswers[globalIdx];
+          const userOptionIdx = userAnswers[answerIdx];
           const correctOptionIdx = q.options.findIndex(o => o.is_correct);
           const labels = ['A', 'B', 'C', 'D'];
-          const expanded = expandedIndex === globalIdx;
+          const expanded = expandedIndex === answerIdx;
           const audioUrl = q.media?.find(m => m.type === 'audio')?.url;
+          const imageUrl = q.media?.find(m => m.type === 'image')?.url;
 
           return (
             <div
@@ -126,17 +152,17 @@ function AnswerReviewContent() {
               className={`bg-white rounded-xl border ${correct ? 'border-green-100' : 'border-red-100'} overflow-hidden transition-all`}
             >
               <button
-                onClick={() => setExpandedIndex(expanded ? null : globalIdx)}
+                onClick={() => setExpandedIndex(expanded ? null : answerIdx)}
                 className="w-full flex items-center gap-3 p-4 text-left"
               >
                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
                   correct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                 }`}>
-                  {globalIdx + 1}
+                  {displayNumber}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-800 truncate">
-                    {q.question_text || `Câu ${globalIdx + 1}`}
+                    {q.question_text || `Câu ${displayNumber}`}
                   </p>
                   <div className="flex items-center gap-2 mt-1 text-xs">
                     {userOptionIdx !== undefined && (
@@ -163,6 +189,13 @@ function AnswerReviewContent() {
                 <div className="px-4 pb-4 border-t border-slate-50">
                   {q.question_text && (
                     <p className="text-sm text-slate-700 mt-3 mb-3">{q.question_text}</p>
+                  )}
+
+                  {imageUrl && (
+                    <div className="mt-3 mb-3 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageUrl} alt="Question" className="w-full max-h-64 object-contain mx-auto rounded-md" />
+                    </div>
                   )}
 
                   {audioUrl && <AudioPlayer url={audioUrl} />}
