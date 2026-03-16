@@ -15,6 +15,8 @@ export interface CreatePaymentRequest {
   amount: number;
   description: string;
   userId?: string;
+  returnUrl?: string;
+  cancelUrl?: string;
 }
 
 export interface CreatePaymentResponse {

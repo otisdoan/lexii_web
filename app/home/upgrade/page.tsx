@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star, Loader2, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
-import { createPayosPayment, confirmPayosPayment, getUserProfile } from '@/lib/api';
+import { createPayosPayment, getUserProfile } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 const PRIMARY = '#1C9C8C';
@@ -90,13 +90,12 @@ const REVIEWS = [
   { name: 'Minh Trí', stars: 5, text: '"Giải thích chi tiết từng câu hỏi, rất dễ hiểu. Chỉ sau 2 tháng tôi đã tăng thêm 150 điểm!"' },
 ];
 
-export default function UpgradePage() {
+function UpgradePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [slide, setSlide] = useState(0);
   const [selectedPlan, setSelectedPlan] = useState(1);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
-  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
   const [userTier, setUserTier] = useState<UserTier>('user');
   const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -146,8 +145,12 @@ export default function UpgradePage() {
     }
 
     if (status === 'cancel') {
-      setFeedback({ type: 'info', message: 'Bạn đã hủy thanh toán. Có thể chọn gói khác để thử lại.' });
-      router.replace('/home/upgrade');
+      router.replace(`/home/upgrade/cancel?orderCode=${orderCode}`);
+      return;
+    }
+
+    if (status === 'success') {
+      router.replace(`/home/upgrade/success?orderCode=${orderCode}`);
       return;
     }
 
@@ -155,37 +158,6 @@ export default function UpgradePage() {
       router.replace('/home/upgrade');
       return;
     }
-
-    const verifyPayment = async () => {
-      let isPaid = false;
-      try {
-        setIsConfirmingPayment(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        const result = await confirmPayosPayment(orderCode, user?.id);
-
-        if (result.status === 'paid') {
-          isPaid = true;
-          setFeedback({ type: 'success', message: 'Thanh toán thành công. Tài khoản đã được nâng cấp Premium.' });
-          await loadPremiumStatus();
-        } else if (result.status === 'pending') {
-          setFeedback({ type: 'info', message: 'Thanh toán đang được xác nhận. Vui lòng kiểm tra lại sau ít phút.' });
-        } else if (result.status === 'cancelled') {
-          setFeedback({ type: 'info', message: 'Thanh toán đã bị hủy.' });
-        } else {
-          setFeedback({ type: 'error', message: result.message || 'Không thể xác nhận thanh toán.' });
-        }
-      } catch (error: unknown) {
-        setFeedback({
-          type: 'error',
-          message: error instanceof Error ? error.message : 'Không thể xác nhận thanh toán.',
-        });
-      } finally {
-        setIsConfirmingPayment(false);
-        router.replace(isPaid ? '/home' : '/home/upgrade');
-      }
-    };
-
-    void verifyPayment();
   }, [loadPremiumStatus, router, searchParams]);
 
   const handleUpgrade = async () => {
@@ -208,6 +180,8 @@ export default function UpgradePage() {
         amount: selected.amount,
         description: 'Lexii Premium',
         userId: user.id,
+        returnUrl: `${window.location.origin}/home/upgrade/success`,
+        cancelUrl: `${window.location.origin}/home/upgrade/cancel`,
       });
 
       if (session.checkoutUrl) {
@@ -406,7 +380,7 @@ export default function UpgradePage() {
         {/* ── CTA ── */}
         <button
           onClick={handleUpgrade}
-          disabled={isCreatingPayment || isConfirmingPayment}
+          disabled={isCreatingPayment}
           className="w-full py-4 rounded-2xl text-white text-base font-bold tracking-wide transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
           style={{
             background: `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`,
@@ -415,7 +389,7 @@ export default function UpgradePage() {
           onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY_DARK} 0%, #0EA5A9 100%)`; }}
           onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`; }}
         >
-          {isCreatingPayment || isConfirmingPayment ? (
+          {isCreatingPayment ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
               Đang xử lý thanh toán...
@@ -543,5 +517,13 @@ export default function UpgradePage() {
 
       </div>
     </div>
+  );
+}
+
+export default function UpgradePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: '#F5F7F9' }} />}>
+      <UpgradePageContent />
+    </Suspense>
   );
 }
