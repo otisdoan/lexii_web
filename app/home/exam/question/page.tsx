@@ -504,6 +504,8 @@ function ExamQuestionContent() {
               {currentQuestion?.options.map((option, idx) => {
                 const isSelected = userAnswers[currentIndex] === idx;
                 const labels = ['A', 'B', 'C', 'D'];
+                const isPart1Or2 = currentPart && (currentPart.part_number === 1 || currentPart.part_number === 2);
+                
                 return (
                   <button
                     key={option.id}
@@ -519,9 +521,11 @@ function ExamQuestionContent() {
                     }`}>
                       {labels[idx]}
                     </span>
-                    <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
-                      {option.content}
-                    </span>
+                    {!isPart1Or2 && (
+                      <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
+                        {option.content}
+                      </span>
+                    )}
                   </button>
                 );
               })}
