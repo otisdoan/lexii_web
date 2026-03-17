@@ -73,7 +73,6 @@ function VocabularyTab() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
     const scoreLevel = selectedScore === 'Tất cả' ? undefined : parseInt(selectedScore);
     getVocabulary(selectedLesson, scoreLevel)
       .then(setWords)
@@ -188,7 +187,11 @@ function VocabListMode({ words }: { words: VocabularyModel[] }) {
   const toggleFav = (id: string) => {
     setFavorites(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -230,7 +233,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
   const word = words[index];
 
   return (
-    <div className="p-6 flex flex-col items-center min-h-[500px]">
+    <div className="p-6 flex flex-col items-center min-h-125">
       {/* Progress */}
       <div className="w-full flex items-center justify-between text-sm text-slate-500 mb-2">
         <span>{index + 1} / {words.length}</span>
@@ -246,7 +249,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
         className="w-full max-w-md flex-1 mb-6"
       >
         {!flipped ? (
-          <div className="bg-white rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-[300px]">
+          <div className="bg-white rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-75">
             {word.word_class && (
               <span className="px-4 py-1 bg-teal-100 text-primary text-xs font-semibold rounded-full mb-5">{word.word_class}</span>
             )}
@@ -257,7 +260,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
             </p>
           </div>
         ) : (
-          <div className="bg-primary rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-[300px]">
+          <div className="bg-primary rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-75">
             <p className="text-2xl font-bold text-white/80">{word.word}</p>
             <div className="w-16 h-px bg-white/25 my-6" />
             <p className="text-2xl font-semibold text-white text-center leading-relaxed">{word.definition}</p>
@@ -343,7 +346,7 @@ function DefinitionQuizMode({ words }: { words: VocabularyModel[] }) {
 
   const word = words[index];
   return (
-    <div className="p-6 flex flex-col min-h-[500px]">
+    <div className="p-6 flex flex-col min-h-125">
       <QuizProgress index={index} total={words.length} correct={correct} />
       <div className="bg-white rounded-2xl p-6 shadow-sm text-center my-4">
         <p className="text-xs text-slate-400 mb-3">Từ nào có nghĩa là?</p>
@@ -399,7 +402,7 @@ function WordChoiceMode({ words }: { words: VocabularyModel[] }) {
 
   const word = words[index];
   return (
-    <div className="p-6 flex flex-col min-h-[500px]">
+    <div className="p-6 flex flex-col min-h-125">
       <QuizProgress index={index} total={words.length} correct={correct} />
       <div className="bg-white rounded-2xl p-6 shadow-sm text-center my-4">
         <p className="text-xs text-slate-400 mb-3">Nghĩa của từ này là?</p>
@@ -428,7 +431,7 @@ function SpeakingMode({ words }: { words: VocabularyModel[] }) {
   const word = words[index];
 
   return (
-    <div className="p-6 flex flex-col items-center min-h-[500px]">
+    <div className="p-6 flex flex-col items-center min-h-125">
       <div className="w-full flex items-center justify-between text-sm text-slate-500 mb-6">
         <span>{index + 1} / {words.length}</span>
         <span className="text-xs text-slate-400">Nghe và luyện phát âm</span>
@@ -503,7 +506,7 @@ function QuizProgress({ index, total, correct }: { index: number; total: number;
 function QuizResult({ correct, total, onRetry }: { correct: number; total: number; onRetry: () => void }) {
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
   return (
-    <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
+    <div className="p-8 flex flex-col items-center justify-center min-h-100">
       <p className={`text-6xl font-bold mb-2 ${pct >= 70 ? 'text-primary' : 'text-red-500'}`}>{pct}%</p>
       <p className="text-sm text-slate-600">{correct} / {total} câu đúng</p>
       <button onClick={onRetry} className="mt-6 px-8 py-3 bg-primary text-white rounded-xl font-semibold">
@@ -528,7 +531,6 @@ function GrammarTab() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
     getGrammar(selectedLesson)
       .then(setGrammars)
       .catch(() => setGrammars([]))

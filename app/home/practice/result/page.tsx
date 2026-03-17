@@ -16,11 +16,12 @@ function PracticeResultContent() {
   const router = useRouter();
 
   const title = searchParams.get('title') || 'Kết quả';
-  const correct = parseInt(searchParams.get('correct') || '0');
-  const total = parseInt(searchParams.get('total') || '0');
   const testId = searchParams.get('testId') || '';
   const partId = searchParams.get('partId') || '';
-  const section = searchParams.get('section') || 'reading';
+  const source = searchParams.get('source') || '';
+  const section = searchParams.get('section') || 'listening';
+  const correct = parseInt(searchParams.get('correct') || '0');
+  const total = parseInt(searchParams.get('total') || '0');
   const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
   const evaluation = getEvaluation(percent);
   const isGood = percent >= 60;
@@ -39,7 +40,7 @@ function PracticeResultContent() {
       <div className="px-4 lg:px-0 mt-6 space-y-4">
         {/* Summary card */}
         <div className="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
-          <div className="w-[72px] h-[72px] rounded-full bg-teal-50 flex items-center justify-center shrink-0">
+          <div className="w-18 h-18 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
             <Trophy className="w-9 h-9 text-primary" />
           </div>
           <div>
@@ -76,7 +77,7 @@ function PracticeResultContent() {
             {/* Visual bar */}
             <div className="flex-1 flex items-end justify-center">
               <div
-                className="w-12 bg-gradient-to-t from-primary to-teal-300 rounded-t-lg transition-all duration-500"
+                className="w-12 bg-linear-to-t from-primary to-teal-300 rounded-t-lg transition-all duration-500"
                 style={{ height: `${Math.max(percent, 5)}%` }}
               />
             </div>
@@ -95,6 +96,7 @@ function PracticeResultContent() {
                 title: title || 'Luyện tập',
                 practice: '1',
               });
+              if (source) params.set('source', source);
               router.push(`/home/exam/answer-review?${params.toString()}`);
             }}
             className="w-full bg-amber-50 hover:bg-amber-100 transition-colors text-amber-600 font-bold text-sm py-4 rounded-2xl flex items-center justify-center gap-1"

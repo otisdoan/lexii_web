@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star } from 'lucide-react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star, Loader2, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
+import { createPayosPayment, getUserProfile } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 const PRIMARY = '#1C9C8C';
 const PRIMARY_DARK = '#167D70';
+
+type UserTier = 'premium' | 'user';
 
 const SLIDES = [
   {
@@ -37,6 +41,9 @@ const SLIDES = [
 const PLANS = [
   {
     id: 0,
+    planId: 'premium_6_months' as const,
+    planName: 'Goi Premium 6 thang',
+    amount: 299000,
     label: '6 tháng',
     price: '299.000đ',
     sub: '49.000đ / tháng',
@@ -46,6 +53,9 @@ const PLANS = [
   },
   {
     id: 1,
+    planId: 'premium_lifetime' as const,
+    planName: 'Goi Premium Tron doi',
+    amount: 1499000,
     label: 'Trọn đời',
     price: '1.499.000đ',
     sub: null as string | null,
@@ -55,6 +65,9 @@ const PLANS = [
   },
   {
     id: 2,
+    planId: 'premium_1_year' as const,
+    planName: 'Goi Premium 1 nam',
+    amount: 599000,
     label: '1 năm',
     price: '599.000đ',
     sub: '49.000đ / tháng',
@@ -77,19 +90,149 @@ const REVIEWS = [
   { name: 'Minh Trí', stars: 5, text: '"Giải thích chi tiết từng câu hỏi, rất dễ hiểu. Chỉ sau 2 tháng tôi đã tăng thêm 150 điểm!"' },
 ];
 
-export default function UpgradePage() {
+function UpgradePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [slide, setSlide] = useState(0);
   const [selectedPlan, setSelectedPlan] = useState(1);
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
+  const [userTier, setUserTier] = useState<UserTier>('user');
+  const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [qrContent, setQrContent] = useState<string | null>(null);
 
   const advance = useCallback(() => setSlide(s => (s + 1) % SLIDES.length), []);
+
+  const loadPremiumStatus = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setUserTier('user');
+      setPremiumExpiresAt(null);
+      return;
+    }
+
+    try {
+      const profile = await getUserProfile(user.id);
+      const role = profile.role === 'premium' ? 'premium' : 'user';
+      setUserTier(role);
+      setPremiumExpiresAt(profile.premium_expires_at ?? null);
+    } catch {
+      setUserTier('user');
+      setPremiumExpiresAt(null);
+    }
+  }, []);
 
   useEffect(() => {
     const id = setInterval(advance, 4000);
     return () => clearInterval(id);
   }, [advance]);
 
+  useEffect(() => {
+    void loadPremiumStatus();
+  }, [loadPremiumStatus]);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const orderCodeRaw = searchParams.get('orderCode');
+
+    if (!status || !orderCodeRaw) return;
+
+    const orderCode = Number(orderCodeRaw);
+    if (!Number.isFinite(orderCode) || orderCode <= 0) {
+      setFeedback({ type: 'error', message: 'Mã đơn hàng không hợp lệ. Vui lòng thử lại.' });
+      router.replace('/home/upgrade');
+      return;
+    }
+
+    if (status === 'cancel') {
+      router.replace(`/home/upgrade/cancel?orderCode=${orderCode}`);
+      return;
+    }
+
+    if (status === 'success') {
+      router.replace(`/home/upgrade/success?orderCode=${orderCode}`);
+      return;
+    }
+
+    if (status !== 'success') {
+      router.replace('/home/upgrade');
+      return;
+    }
+  }, [loadPremiumStatus, router, searchParams]);
+
+  const handleUpgrade = async () => {
+    try {
+      setFeedback(null);
+      setQrContent(null);
+      setIsCreatingPayment(true);
+
+      const selected = PLANS.find(plan => plan.id === selectedPlan) ?? PLANS[1];
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push('/auth/login');
+        return;
+      }
+
+      const session = await createPayosPayment({
+        planId: selected.planId,
+        planName: selected.planName,
+        amount: selected.amount,
+        description: 'Lexii Premium',
+        userId: user.id,
+        returnUrl: `${window.location.origin}/home/upgrade/success`,
+        cancelUrl: `${window.location.origin}/home/upgrade/cancel`,
+      });
+
+      if (session.checkoutUrl) {
+        window.location.href = session.checkoutUrl;
+        return;
+      }
+
+      if (session.qrCode || session.vietQrData) {
+        setQrContent(session.qrCode || session.vietQrData || null);
+        setFeedback({ type: 'info', message: 'Vui lòng quét mã QR để hoàn tất thanh toán.' });
+        return;
+      }
+
+      setFeedback({ type: 'error', message: 'Không nhận được liên kết thanh toán từ hệ thống.' });
+    } catch (error: unknown) {
+      setFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Không thể khởi tạo thanh toán. Vui lòng thử lại.',
+      });
+    } finally {
+      setIsCreatingPayment(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/home');
+  };
+
+  const copyQrContent = async () => {
+    if (!qrContent) return;
+    try {
+      await navigator.clipboard.writeText(qrContent);
+      setFeedback({ type: 'success', message: 'Đã sao chép nội dung QR. Dán vào app ngân hàng để thanh toán.' });
+    } catch {
+      setFeedback({ type: 'error', message: 'Không thể sao chép nội dung QR.' });
+    }
+  };
+
   const { Icon, color: iconBg, title, desc } = SLIDES[slide];
+
+  const premiumExpiryLabel = premiumExpiresAt
+    ? new Date(premiumExpiresAt).toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+    : null;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F7F9' }}>
@@ -97,7 +240,7 @@ export default function UpgradePage() {
       <div className="sticky top-0 z-10 bg-white border-b border-slate-100 rounded-md" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
         <div className="max-w-275 mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="p-2 rounded-full hover:bg-slate-100 transition-colors"
             aria-label="Quay lại"
           >
@@ -236,6 +379,8 @@ export default function UpgradePage() {
 
         {/* ── CTA ── */}
         <button
+          onClick={handleUpgrade}
+          disabled={isCreatingPayment}
           className="w-full py-4 rounded-2xl text-white text-base font-bold tracking-wide transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
           style={{
             background: `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`,
@@ -244,22 +389,45 @@ export default function UpgradePage() {
           onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY_DARK} 0%, #0EA5A9 100%)`; }}
           onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = `linear-gradient(135deg, ${PRIMARY} 0%, #14B8A6 100%)`; }}
         >
-          Nâng cấp gói đã chọn
+          {isCreatingPayment ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Đang xử lý thanh toán...
+            </span>
+          ) : 'Nâng cấp gói đã chọn'}
         </button>
 
-        {/* ── Footer links ── */}
-        <div className="flex flex-col items-center gap-3 pb-6">
-          <button className="text-sm font-medium text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors">
-            Khôi phục thanh toán
-          </button>
-          <button
-            onClick={() => router.back()}
-            className="text-sm font-semibold transition-colors hover:opacity-80"
-            style={{ color: PRIMARY }}
-          >
-            Bỏ qua và tiếp tục
-          </button>
-        </div>
+        {feedback && (
+          <div className={`rounded-xl px-4 py-3 flex items-center gap-2 text-sm font-medium ${
+            feedback.type === 'success'
+              ? 'bg-green-100 text-green-700'
+              : feedback.type === 'error'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-teal-50 text-teal-700'
+          }`}>
+            {feedback.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+            {feedback.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0" />}
+            {feedback.type === 'info' && <Sparkles className="w-4 h-4 shrink-0" />}
+            <span>{feedback.message}</span>
+          </div>
+        )}
+
+        {qrContent && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+            <p className="text-sm font-semibold text-slate-800">Nội dung mã QR thanh toán</p>
+            <p className="text-xs text-slate-500">Nếu trang thanh toán không tự mở, bạn có thể sao chép nội dung dưới đây để thanh toán trong app ngân hàng.</p>
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 max-h-44 overflow-y-auto">
+              <p className="text-xs text-slate-700 break-all">{qrContent}</p>
+            </div>
+            <button
+              onClick={copyQrContent}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+            >
+              <Copy className="w-4 h-4" />
+              Sao chép nội dung QR
+            </button>
+          </div>
+        )}
 
         {/* Account status */}
         <div className="bg-white rounded-xl p-4 shadow-sm">
@@ -267,16 +435,29 @@ export default function UpgradePage() {
             <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <p className="text-sm text-slate-600">
-              Tài khoản <span className="font-bold">Phạm Thùy Trang</span> vừa nâng cấp
-            </p>
+            <div>
+              <p className="text-sm text-slate-700 font-semibold">
+                Trạng thái hiện tại: {userTier === 'premium' ? 'Premium' : 'Miễn phí'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {userTier === 'premium'
+                  ? premiumExpiryLabel
+                    ? `Gói hiện tại có hiệu lực đến ${premiumExpiryLabel}`
+                    : 'Tài khoản của bạn đang có gói trọn đời.'
+                  : 'Nâng cấp để mở toàn bộ nội dung học nâng cao.'}
+              </p>
+            </div>
           </div>
-          <div className="flex justify-center gap-3">
-            {['9', '9', '5', '7'].map((d, i) => (
-              <div key={i} className="w-12 h-12 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-xl font-black text-primary">
-                {d}
-              </div>
-            ))}
+          <div className="flex justify-center gap-2">
+            {userTier === 'premium' ? (
+              <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                Premium đang hoạt động
+              </span>
+            ) : (
+              <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                Tài khoản miễn phí
+              </span>
+            )}
           </div>
         </div>
 
@@ -336,5 +517,13 @@ export default function UpgradePage() {
 
       </div>
     </div>
+  );
+}
+
+export default function UpgradePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: '#F5F7F9' }} />}>
+      <UpgradePageContent />
+    </Suspense>
   );
 }

@@ -12,8 +12,9 @@ import {
   PenTool,
   ChevronRight,
   Search,
+  Lock,
 } from 'lucide-react';
-import { getAllTests } from '@/lib/api';
+import { getAllTests, getCurrentUserRole } from '@/lib/api';
 import type { TestModel } from '@/lib/types';
 
 export default function ExamPage() {
@@ -21,12 +22,17 @@ export default function ExamPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'full' | 'mini'>('all');
   const [search, setSearch] = useState('');
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const data = await getAllTests();
+        const [data, role] = await Promise.all([
+          getAllTests(),
+          getCurrentUserRole(),
+        ]);
         setTests(data);
+        setIsPremiumUser(role === 'premium' || role === 'admin');
       } catch {
         // handle error
       } finally {
@@ -104,7 +110,7 @@ export default function ExamPage() {
               <h3 className="text-lg font-bold text-slate-800 mb-4">Full Test ({fullTests.length})</h3>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {fullTests.map(test => (
-                  <TestCard key={test.id} test={test} />
+                  <TestCard key={test.id} test={test} isPremiumUser={isPremiumUser} />
                 ))}
               </div>
             </section>
@@ -116,7 +122,7 @@ export default function ExamPage() {
               <h3 className="text-lg font-bold text-slate-800 mb-4">Mini Test ({miniTests.length})</h3>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {miniTests.map(test => (
-                  <TestCard key={test.id} test={test} variant="mini" />
+                  <TestCard key={test.id} test={test} variant="mini" isPremiumUser={isPremiumUser} />
                 ))}
               </div>
             </section>
@@ -127,7 +133,7 @@ export default function ExamPage() {
             <h3 className="text-lg font-bold text-slate-800 mb-4">Speaking & Writing</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <Link
-                href="/home/practice/speaking"
+                href={isPremiumUser ? '/home/practice/speaking' : '/home/upgrade'}
                 className="flex items-center gap-4 bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all group"
               >
                 <div className="w-14 h-14 bg-orange-50 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -135,12 +141,14 @@ export default function ExamPage() {
                 </div>
                 <div className="flex-1">
                   <h4 className="font-semibold text-slate-800">Speaking Practice</h4>
-                  <p className="text-sm text-slate-500 mt-0.5">Luyện nói với các chủ đề TOEIC</p>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {isPremiumUser ? 'Luyện nói với các chủ đề TOEIC' : 'Nâng cấp Premium để mở khóa'}
+                  </p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-400" />
+                {isPremiumUser ? <ChevronRight className="w-5 h-5 text-slate-400" /> : <Lock className="w-5 h-5 text-amber-500" />}
               </Link>
               <Link
-                href="/home/practice/writing"
+                href={isPremiumUser ? '/home/practice/writing' : '/home/upgrade'}
                 className="flex items-center gap-4 bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all group"
               >
                 <div className="w-14 h-14 bg-purple-50 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -148,9 +156,11 @@ export default function ExamPage() {
                 </div>
                 <div className="flex-1">
                   <h4 className="font-semibold text-slate-800">Writing Practice</h4>
-                  <p className="text-sm text-slate-500 mt-0.5">Luyện viết theo các dạng bài</p>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {isPremiumUser ? 'Luyện viết theo các dạng bài' : 'Nâng cấp Premium để mở khóa'}
+                  </p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-400" />
+                {isPremiumUser ? <ChevronRight className="w-5 h-5 text-slate-400" /> : <Lock className="w-5 h-5 text-amber-500" />}
               </Link>
             </div>
           </section>
@@ -168,19 +178,32 @@ export default function ExamPage() {
   );
 }
 
-function TestCard({ test, variant = 'full' }: { test: TestModel; variant?: 'full' | 'mini' }) {
+function TestCard({
+  test,
+  variant = 'full',
+  isPremiumUser,
+}: {
+  test: TestModel;
+  variant?: 'full' | 'mini';
+  isPremiumUser: boolean;
+}) {
   const isMini = variant === 'mini';
+  const isLocked = test.is_premium && !isPremiumUser;
+  const href = isLocked
+    ? '/home/upgrade'
+    : `/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}&isPremium=${test.is_premium ? '1' : '0'}`;
+
   return (
     <Link
-      href={`/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}`}
+      href={href}
       className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
     >
       <div className="flex items-start justify-between mb-3">
         <div className={`w-11 h-11 ${isMini ? 'bg-indigo-50' : 'bg-teal-50'} rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform`}>
           {isMini ? <Star className="w-5 h-5 text-indigo-600" /> : <FileText className="w-5 h-5 text-primary" />}
         </div>
-        {test.is_premium && (
-          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">PRO</span>
+        {test.is_premium && !isPremiumUser && (
+          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">Premium</span>
         )}
       </div>
       <h4 className="font-semibold text-slate-800 text-sm mb-2 line-clamp-2">{test.title}</h4>
@@ -190,7 +213,7 @@ function TestCard({ test, variant = 'full' }: { test: TestModel; variant?: 'full
       </div>
       <div className="mt-3 pt-3 border-t border-slate-50">
         <span className={`text-xs font-medium ${isMini ? 'text-indigo-600' : 'text-primary'}`}>
-          Bắt đầu làm bài →
+          {isLocked ? 'Mở khóa Premium →' : 'Bắt đầu làm bài →'}
         </span>
       </div>
     </Link>

@@ -1,8 +1,6 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
-
-const NAV_PAGE_SIZE = 10;
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -11,17 +9,21 @@ import {
   FileText,
   BookOpen,
   ScrollText,
+  Receipt,
   Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Bell,
+  BellRing,
   Menu,
   X,   
 
   
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import NotificationBell from '@/components/notifications/notification-bell';
+
+const NAV_PAGE_SIZE = 10;
 
 interface AdminUser {
   name: string;
@@ -33,6 +35,8 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'Người dùng', icon: Users },
   { href: '/admin/tests', label: 'Đề thi', icon: FileText },
+  { href: '/admin/transactions', label: 'Giao dịch', icon: Receipt },
+  { href: '/admin/notifications', label: 'Thông báo', icon: BellRing },
   { href: '/admin/vocabulary', label: 'Từ vựng', icon: BookOpen },
   { href: '/admin/grammar', label: 'Ngữ pháp', icon: ScrollText },
   { href: '/admin/settings', label: 'Cài đặt', icon: Settings },
@@ -58,8 +62,16 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
       {/* Logo */}
       <div className="px-6 py-6 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shadow-inner">
-            <span className="text-white font-black text-xl">L</span>
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/lexii.jpg?v=2"
+              alt="Lexii logo"
+              className="w-full h-full object-cover"
+              onError={(event) => {
+                event.currentTarget.src = '/next.svg';
+              }}
+            />
           </div>
           <div>
             <h1 className="text-white font-bold text-lg leading-none">Lexii</h1>
@@ -222,10 +234,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="relative p-2 rounded-xl hover:bg-slate-100 transition-colors">
-                <Bell className="w-5 h-5 text-slate-500" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
-              </button>
+              <NotificationBell notificationsPageHref="/admin/notifications" />
               {user?.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.avatar} alt="avatar" className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20" />

@@ -88,4 +88,29 @@
   .carousel-slide {
     animation: carousel-fade-in 0.4s ease forwards;
   }
+
+  @keyframes premium-rainbow-flow {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 300% 50%;
+    }
+  }
+
+  .premium-avatar-ring {
+    background-image: linear-gradient(
+      120deg,
+      #ff0040,
+      #ff7a00,
+      #ffd400,
+      #00c853,
+      #00c2ff,
+      #3d5afe,
+      #a100ff,
+      #ff0040
+    );
+    background-size: 320% 320%;
+    animation: premium-rainbow-flow 2.4s linear infinite;
+  }
 }

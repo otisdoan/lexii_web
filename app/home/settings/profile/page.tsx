@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Camera, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getUserProfile, updateUserProfile, getUserStats } from '@/lib/api';
+import { getCurrentUserPremiumSubscriptionInfo, getUserProfile, updateUserProfile, getUserStats } from '@/lib/api';
 
 interface ProfileData {
   id: string;
@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [premiumInfo, setPremiumInfo] = useState<{ startedAt: string | null; expiresAt: string | null; isLifetime: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -48,10 +49,23 @@ export default function ProfilePage() {
         setPhone(p.phone || '');
         setAvatarUrl(p.avatar_url || user.user_metadata?.avatar_url || '');
         setStats(s);
+        if (p.role === 'premium') {
+          const subscriptionInfo = await getCurrentUserPremiumSubscriptionInfo().catch(() => null);
+          setPremiumInfo(subscriptionInfo
+            ? {
+                startedAt: subscriptionInfo.startedAt,
+                expiresAt: subscriptionInfo.expiresAt,
+                isLifetime: subscriptionInfo.isLifetime,
+              }
+            : null);
+        } else {
+          setPremiumInfo(null);
+        }
       } catch {
         // Profile may not exist yet, fall back to auth metadata
         setFullName(user.user_metadata?.full_name || user.user_metadata?.name || '');
         setAvatarUrl(user.user_metadata?.avatar_url || '');
+        setPremiumInfo(null);
       } finally {
         setLoading(false);
       }
@@ -122,6 +136,13 @@ export default function ProfilePage() {
 
   const displayInitial = (fullName || email || 'U')[0].toUpperCase();
 
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -144,18 +165,20 @@ export default function ProfilePage() {
         {/* Avatar section */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
-            {avatarUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={avatarUrl}
-                alt="avatar"
-                className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-lg"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-3xl font-bold text-white ring-4 ring-white shadow-lg">
-                {displayInitial}
-              </div>
-            )}
+            <div className={profile?.role === 'premium' ? 'p-1.5 rounded-full premium-avatar-ring shadow-[0_0_0_4px_rgba(251,191,36,0.18)]' : ''}>
+              {avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatarUrl}
+                  alt="avatar"
+                  className={`w-24 h-24 rounded-full object-cover shadow-lg ${profile?.role === 'premium' ? 'border-4 border-white' : 'ring-4 ring-white'}`}
+                />
+              ) : (
+                <div className={`w-24 h-24 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-3xl font-bold text-white shadow-lg ${profile?.role === 'premium' ? 'border-4 border-white' : 'ring-4 ring-white'}`}>
+                  {displayInitial}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-md border-2 border-white hover:bg-primary/90 transition-colors"
@@ -234,13 +257,21 @@ export default function ProfilePage() {
             {profile?.role && (
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">Vai trò</label>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                  profile.role === 'premium'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {profile.role === 'premium' ? '⭐ Premium' : 'Miễn phí'}
-                </span>
+                {profile.role !== 'premium' ? (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                    Miễn phí
+                  </span>
+                ) : (
+                  <div className="space-y-2">
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                      Đã kích hoạt
+                    </span>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>Bắt đầu: {formatDate(premiumInfo?.startedAt)}</p>
+                      <p>Hết hạn: {premiumInfo?.isLifetime ? 'Trọn đời' : formatDate(premiumInfo?.expiresAt)}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

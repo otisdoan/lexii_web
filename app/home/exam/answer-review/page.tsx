@@ -194,6 +194,13 @@ function AnswerReviewContent() {
                     <p className="text-sm text-slate-700 mt-3 mb-3">{q.question_text}</p>
                   )}
 
+                  {imageUrl && (
+                    <div className="mt-3 mb-3 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageUrl} alt="Question" className="w-full max-h-64 object-contain mx-auto rounded-md" />
+                    </div>
+                  )}
+
                   {audioUrl && <AudioPlayer url={audioUrl} />}
 
                   {imageUrl && (

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { BookOpen, Bell, Sparkles, ChevronRight } from 'lucide-react';
 
@@ -51,14 +52,14 @@ export default function OnboardingPage() {
   const isLast = currentStep === steps.length - 1;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-teal-50 via-white to-teal-50">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-teal-50 via-white to-teal-50">
       <div className="w-full max-w-lg mx-auto px-6">
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-10 text-center">
           {/* Logo */}
           <div className="mb-6">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-dark mx-auto flex items-center justify-center shadow-md">
-              <span className="text-white font-bold text-2xl">L</span>
+            <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto shadow-md border border-slate-200">
+              <Image src="/lexii.jpg" alt="Lexii logo" width={80} height={80} className="w-full h-full object-cover" priority />
             </div>
           </div>
 

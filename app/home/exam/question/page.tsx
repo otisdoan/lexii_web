@@ -13,8 +13,15 @@ import {
   Send,
   Volume2,
   X,
+  Lock,
 } from 'lucide-react';
-import { getQuestionsByPartId, getQuestionsByTestId, getTestParts } from '@/lib/api';
+import {
+  getQuestionsByPartId,
+  getQuestionsByTestId,
+  getTestParts,
+  getTestById,
+  getCurrentUserRole,
+} from '@/lib/api';
 import type { QuestionModel, TestPartModel } from '@/lib/types';
 
 function ExamQuestionContent() {
@@ -33,6 +40,7 @@ function ExamQuestionContent() {
   const [timeLeft, setTimeLeft] = useState(120 * 60); // 120 min
   const [showOverview, setShowOverview] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -61,6 +69,19 @@ function ExamQuestionContent() {
         }));
 
         setQuestions(loadedQuestions);
+
+        if (testId) {
+          const [test, role] = await Promise.all([
+            getTestById(testId),
+            getCurrentUserRole(),
+          ]);
+          const premiumUser = role === 'premium' || role === 'admin';
+          const blockedByTest = Boolean(test?.is_premium) && !premiumUser;
+          if (blockedByTest) {
+            setHasAccess(false);
+            return;
+          }
+        }
       } catch (error) {
         console.error('Lỗi khi tải dữ liệu đề thi:', error);
       } finally {
@@ -75,6 +96,7 @@ function ExamQuestionContent() {
 
   // Timer
   useEffect(() => {
+    if (isPractice) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 0) {
@@ -87,7 +109,7 @@ function ExamQuestionContent() {
     }, 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPractice]);
 
   // Audio progress
   useEffect(() => {
@@ -229,6 +251,24 @@ function ExamQuestionContent() {
     );
   }
 
+  if (!hasAccess) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="bg-white border border-amber-200 rounded-2xl p-6 text-center max-w-md">
+          <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-800 mb-1">Nội dung Premium</h3>
+          <p className="text-sm text-slate-500 mb-4">Tài khoản hiện tại chưa có quyền truy cập bài thi này.</p>
+          <button
+            onClick={() => router.push('/home/upgrade')}
+            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+          >
+            Nâng cấp Premium
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -246,7 +286,7 @@ function ExamQuestionContent() {
     <div className="pb-20 lg:pb-8">
       {/* Header */}
      <div className='sm:px-10'>
-       <div className="sticky top-[80px] z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
+      <div className="sticky top-20 z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -273,7 +313,7 @@ function ExamQuestionContent() {
               timeLeft < 300 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-700'
             }`}>
               <Clock className="w-4 h-4" />
-              {formatTime(timeLeft)}
+              {isPractice ? 'Practice' : formatTime(timeLeft)}
             </div>
 
             {/* Overview */}
@@ -350,7 +390,8 @@ function ExamQuestionContent() {
           {/* Image */}
           {imageUrl && (
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
-              <img src={imageUrl} alt="Question" className="w-full rounded-xl" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="Question" className="w-full rounded-xl h-auto" />
             </div>
           )}
 
@@ -358,7 +399,7 @@ function ExamQuestionContent() {
           {currentQuestion?.passage && (
             <div className="bg-white rounded-2xl border border-slate-100 p-6">
               <h4 className="font-semibold text-slate-800 mb-3">{currentQuestion.passage.title}</h4>
-              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-100 overflow-y-auto">
                 {currentQuestion.passage.content}
               </div>
             </div>
@@ -447,7 +488,7 @@ function ExamQuestionContent() {
       {showOverview && (
         <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowOverview(false)} />
-          <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full lg:w-[480px] max-h-[80vh] overflow-auto p-6">
+          <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full lg:w-120 max-h-[80vh] overflow-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-800">Tổng quan ({answeredCount}/{questions.length})</h3>
               <button onClick={() => setShowOverview(false)} className="p-1 hover:bg-slate-100 rounded-xl">
