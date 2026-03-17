@@ -504,6 +504,8 @@ function ExamQuestionContent() {
               {currentQuestion?.options.map((option, idx) => {
                 const isSelected = userAnswers[currentIndex] === idx;
                 const labels = ['A', 'B', 'C', 'D'];
+                const isHiddenContent = currentPart && [1, 2].includes(currentPart.part_number);
+                
                 return (
                   <button
                     key={option.id}
@@ -520,7 +522,7 @@ function ExamQuestionContent() {
                       {labels[idx]}
                     </span>
                     <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
-                      {option.content}
+                      {!isHiddenContent && option.content}
                     </span>
                   </button>
                 );
