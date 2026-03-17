@@ -14,7 +14,7 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { getQuestionsByTestId, getTestParts } from '@/lib/api';
+import { getQuestionsByPartId, getQuestionsByTestId, getTestParts } from '@/lib/api';
 import type { QuestionModel, TestPartModel } from '@/lib/types';
 
 function ExamQuestionContent() {
@@ -22,6 +22,8 @@ function ExamQuestionContent() {
   const router = useRouter();
   const testId = searchParams.get('testId') || '';
   const testTitle = searchParams.get('title') || 'Test';
+  const isPractice = searchParams.get('practice') === 'true';
+  const partId = searchParams.get('partId') || '';
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [parts, setParts] = useState<TestPartModel[]>([]);
@@ -36,24 +38,40 @@ function ExamQuestionContent() {
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Load questions
+  // Load questions (luyện tập 1 part hoặc thi thử toàn đề)
   useEffect(() => {
-    async function load() {
+    const loadData = async () => {
       try {
-        const [qs, ps] = await Promise.all([
-          getQuestionsByTestId(testId),
-          getTestParts(testId),
-        ]);
-        setQuestions(qs);
-        setParts(ps);
-      } catch {
-        //
+        const allParts = testId ? await getTestParts(testId) : [];
+        let loadedQuestions: QuestionModel[] = [];
+
+        if (isPractice && partId) {
+          loadedQuestions = await getQuestionsByPartId(partId);
+          setParts(allParts.filter((p) => p.id === partId));
+        } else if (testId) {
+          loadedQuestions = await getQuestionsByTestId(testId);
+          setParts(allParts);
+        }
+
+        loadedQuestions = loadedQuestions.map((q) => ({
+          ...q,
+          options: [...(q.options || [])].sort((a, b) =>
+            String(a.id).localeCompare(String(b.id))
+          ),
+        }));
+
+        setQuestions(loadedQuestions);
+      } catch (error) {
+        console.error('Lỗi khi tải dữ liệu đề thi:', error);
       } finally {
         setLoading(false);
       }
+    };
+
+    if (testId || (isPractice && partId)) {
+      loadData();
     }
-    if (testId) load();
-  }, [testId]);
+  }, [testId, partId, isPractice]);
 
   // Timer
   useEffect(() => {
@@ -168,21 +186,37 @@ function ExamQuestionContent() {
   }, [questions, parts, userAnswers]);
 
   const handleSubmit = useCallback(() => {
-    const { listeningScore, readingScore, totalCorrect } = calculateScores();
-    const params = new URLSearchParams({
-      testId,
-      title: testTitle,
-      listeningScore: String(listeningScore),
-      readingScore: String(readingScore),
-      totalCorrect: String(totalCorrect),
-      totalQuestions: String(questions.length),
-    });
-    // Store answers in sessionStorage for the result page
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
+    if (isPractice && partId) {
+      let correctCount = 0;
+      questions.forEach((q, index) => {
+        const userSelectedOptionIndex = userAnswers[index];
+        if (userSelectedOptionIndex !== undefined) {
+          const selectedOption = q.options[userSelectedOptionIndex];
+          if (selectedOption?.is_correct) correctCount++;
+        }
+      });
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`practice_answers_${partId}`, JSON.stringify(userAnswers));
+      }
+      router.push(
+        `/home/practice/result?testId=${testId}&partId=${partId}&section=listening&title=${encodeURIComponent(testTitle)}&correct=${correctCount}&total=${questions.length}`
+      );
+    } else {
+      const { listeningScore, readingScore, totalCorrect } = calculateScores();
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`exam_answers_${testId}`, JSON.stringify(userAnswers));
+      }
+      const params = new URLSearchParams({
+        testId,
+        title: testTitle,
+        listeningScore: String(listeningScore),
+        readingScore: String(readingScore),
+        totalCorrect: String(totalCorrect),
+        totalQuestions: String(questions.length),
+      });
+      router.push(`/home/exam/score?${params.toString()}`);
     }
-    router.push(`/home/exam/score?${params.toString()}`);
-  }, [calculateScores, testId, testTitle, questions.length, userAnswers, router]);
+  }, [isPractice, partId, testId, testTitle, questions, userAnswers, calculateScores, router]);
 
   if (loading) {
     return (

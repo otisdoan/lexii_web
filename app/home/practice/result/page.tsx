@@ -18,9 +18,13 @@ function PracticeResultContent() {
   const title = searchParams.get('title') || 'Kết quả';
   const correct = parseInt(searchParams.get('correct') || '0');
   const total = parseInt(searchParams.get('total') || '0');
+  const testId = searchParams.get('testId') || '';
+  const partId = searchParams.get('partId') || '';
+  const section = searchParams.get('section') || 'reading';
   const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
   const evaluation = getEvaluation(percent);
   const isGood = percent >= 60;
+  const canViewAnswers = Boolean(testId && partId);
 
   return (
     <div className="pb-24 lg:pb-8">
@@ -80,13 +84,24 @@ function PracticeResultContent() {
           <p className="text-[10px] text-slate-400 text-center mt-2">Tỉ lệ / Lần thử</p>
         </div>
 
-        {/* View all answers link */}
-        <button
-          onClick={() => router.push('/home')}
-          className="w-full bg-amber-50 hover:bg-amber-100 transition-colors text-amber-600 font-bold text-sm py-4 rounded-2xl flex items-center justify-center gap-1"
-        >
-          Xem tất cả câu trả lời <ChevronRight className="w-4 h-4" />
-        </button>
+        {/* View all answers link - chỉ khi có testId + partId (từ luyện tập reading/listening) */}
+        {canViewAnswers && (
+          <button
+            onClick={() => {
+              const params = new URLSearchParams({
+                testId,
+                partId,
+                section,
+                title: title || 'Luyện tập',
+                practice: '1',
+              });
+              router.push(`/home/exam/answer-review?${params.toString()}`);
+            }}
+            className="w-full bg-amber-50 hover:bg-amber-100 transition-colors text-amber-600 font-bold text-sm py-4 rounded-2xl flex items-center justify-center gap-1"
+          >
+            Xem tất cả câu trả lời <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Bottom bar */}

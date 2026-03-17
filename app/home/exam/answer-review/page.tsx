@@ -12,7 +12,7 @@ function AnswerReviewContent() {
   const testId = searchParams.get('testId') || '';
   const testTitle = searchParams.get('title') || 'Test';
   const partId = searchParams.get('partId');
-  const section = searchParams.get('section') || 'listening';
+  const fromPractice = searchParams.get('practice') === '1' || searchParams.get('practice') === 'true';
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [allQuestions, setAllQuestions] = useState<QuestionModel[]>([]);
@@ -21,32 +21,60 @@ function AnswerReviewContent() {
   const [filter, setFilter] = useState<'all' | 'correct' | 'wrong'>('all');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
+  // Sort options (A,B,C,D) theo id để đồng bộ với trang thi — tránh lệch đáp án khi xem lại.
+  const sortQuestionsOptions = (qs: QuestionModel[]): QuestionModel[] =>
+    qs.map((q) => ({
+      ...q,
+      options: [...(q.options || [])].sort((a, b) =>
+        String(a.id).localeCompare(String(b.id))
+      ),
+    }));
+
   useEffect(() => {
     async function load() {
       try {
-        const all = await getQuestionsByTestId(testId);
-        setAllQuestions(all);
+        let all: QuestionModel[] = testId ? await getQuestionsByTestId(testId) : [];
+        all = sortQuestionsOptions(all || []);
 
-        const qs = partId
+        let qs: QuestionModel[] = partId
           ? await getQuestionsByPartId(partId)
           : all;
+        qs = sortQuestionsOptions(qs);
+
+        setAllQuestions(all);
         setQuestions(qs);
 
-        const stored = sessionStorage.getItem('exam_answers');
-        if (stored) setUserAnswers(JSON.parse(stored));
+        // Chỉ dùng practice_answers khi vào từ trang kết quả luyện tập (practice=1)
+        if (fromPractice && partId && typeof window !== 'undefined') {
+          const practiceStored = sessionStorage.getItem(`practice_answers_${partId}`);
+          if (practiceStored) {
+            setUserAnswers(JSON.parse(practiceStored));
+          } else {
+            const stored = sessionStorage.getItem(`exam_answers_${testId}`);
+            if (stored) setUserAnswers(JSON.parse(stored));
+          }
+        } else {
+          const stored = sessionStorage.getItem(`exam_answers_${testId}`);
+          if (stored) setUserAnswers(JSON.parse(stored));
+        }
       } catch {
         //
       } finally {
         setLoading(false);
       }
     }
-    if (testId) load();
-  }, [testId, partId]);
+    if (testId || partId) load();
+  }, [testId, partId, fromPractice]);
 
-  const getGlobalIndex = (q: QuestionModel) => allQuestions.findIndex(aq => aq.id === q.id);
+  // Luyện tập (practice=1): dùng Local Index (vị trí trong part). Thi thử: dùng Global Index (vị trí trong toàn đề).
+  // Dùng fromPractice từ URL để tránh race khi isPracticeReview set async.
+  const getAnswerIndex = (q: QuestionModel) =>
+    fromPractice && partId
+      ? questions.findIndex((aq) => aq.id === q.id)
+      : allQuestions.findIndex((aq) => aq.id === q.id);
 
   const isCorrect = (q: QuestionModel) => {
-    const idx = getGlobalIndex(q);
+    const idx = getAnswerIndex(q);
     if (userAnswers[idx] === undefined) return false;
     return q.options[userAnswers[idx]]?.is_correct ?? false;
   };
@@ -112,13 +140,14 @@ function AnswerReviewContent() {
       {/* Question list */}
       <div className="space-y-3">
         {filtered.map((q) => {
-          const globalIdx = getGlobalIndex(q);
+          const answerIdx = getAnswerIndex(q);
           const correct = isCorrect(q);
-          const userOptionIdx = userAnswers[globalIdx];
+          const userOptionIdx = userAnswers[answerIdx];
           const correctOptionIdx = q.options.findIndex(o => o.is_correct);
           const labels = ['A', 'B', 'C', 'D'];
-          const expanded = expandedIndex === globalIdx;
+          const expanded = expandedIndex === answerIdx;
           const audioUrl = q.media?.find(m => m.type === 'audio')?.url;
+          const imageUrl = q.media?.find(m => m.type === 'image')?.url;
 
           return (
             <div
@@ -126,17 +155,17 @@ function AnswerReviewContent() {
               className={`bg-white rounded-xl border ${correct ? 'border-green-100' : 'border-red-100'} overflow-hidden transition-all`}
             >
               <button
-                onClick={() => setExpandedIndex(expanded ? null : globalIdx)}
+                onClick={() => setExpandedIndex(expanded ? null : answerIdx)}
                 className="w-full flex items-center gap-3 p-4 text-left"
               >
                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
                   correct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                 }`}>
-                  {globalIdx + 1}
+                  {answerIdx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-800 truncate">
-                    {q.question_text || `Câu ${globalIdx + 1}`}
+                    {q.question_text || `Câu ${answerIdx + 1}`}
                   </p>
                   <div className="flex items-center gap-2 mt-1 text-xs">
                     {userOptionIdx !== undefined && (
@@ -166,6 +195,13 @@ function AnswerReviewContent() {
                   )}
 
                   {audioUrl && <AudioPlayer url={audioUrl} />}
+
+                  {imageUrl && (
+                    <div className="bg-white rounded-xl border border-slate-100 p-4 mt-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageUrl} alt="Câu hỏi" className="w-full rounded-xl" />
+                    </div>
+                  )}
 
                   {q.passage && (
                     <div className="bg-slate-50 rounded-lg p-3 mb-3 mt-3">

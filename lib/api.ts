@@ -42,38 +42,17 @@ export async function getTestParts(testId: string): Promise<TestPartModel[]> {
   return data || [];
 }
 
+/** Lấy câu hỏi theo test, đảm bảo thứ tự: Part 1 (order_index) → Part 2 → … → Part 7. */
 export async function getQuestionsByTestId(testId: string): Promise<QuestionModel[]> {
-  const { data: parts, error: partsError } = await supabase
-    .from('test_parts')
-    .select('id')
-    .eq('test_id', testId)
-    .order('part_number');
-  if (partsError) throw partsError;
-  if (!parts?.length) return [];
+  const parts = await getTestParts(testId);
+  if (!parts.length) return [];
 
-  const partIds = parts.map(p => p.id);
-  const { data: questions, error: qError } = await supabase
-    .from('questions')
-    .select(`
-      *,
-      question_options(*),
-      question_media(*),
-      passages(*)
-    `)
-    .in('part_id', partIds)
-    .order('order_index');
-  if (qError) throw qError;
-
-  return (questions || []).map((q: Record<string, unknown>) => ({
-    id: q.id as string,
-    part_id: q.part_id as string,
-    passage_id: q.passage_id as string | null,
-    question_text: q.question_text as string | null,
-    order_index: q.order_index as number,
-    options: (q.question_options || []) as unknown as QuestionModel['options'],
-    media: (q.question_media || []) as unknown as QuestionModel['media'],
-    passage: (q.passages || null) as unknown as QuestionModel['passage'],
-  })) as QuestionModel[];
+  const result: QuestionModel[] = [];
+  for (const part of parts) {
+    const qs = await getQuestionsByPartId(part.id);
+    result.push(...qs);
+  }
+  return result;
 }
 
 export async function getQuestionsByPartId(partId: string, limit?: number): Promise<QuestionModel[]> {
@@ -93,13 +72,16 @@ export async function getQuestionsByPartId(partId: string, limit?: number): Prom
   const { data, error } = await query;
   if (error) throw error;
 
+  const sortOptionsById = (opts: unknown[]) =>
+    [...opts].sort((a, b) => String((a as { id?: string }).id ?? '').localeCompare(String((b as { id?: string }).id ?? '')));
+
   return (data || []).map((q: Record<string, unknown>) => ({
     id: q.id as string,
     part_id: q.part_id as string,
     passage_id: q.passage_id as string | null,
     question_text: q.question_text as string | null,
     order_index: q.order_index as number,
-    options: (q.question_options || []) as unknown as QuestionModel['options'],
+    options: sortOptionsById((q.question_options || []) as { id: string }[]) as unknown as QuestionModel['options'],
     media: (q.question_media || []) as unknown as QuestionModel['media'],
     passage: (q.passages || null) as unknown as QuestionModel['passage'],
   })) as QuestionModel[];
