@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -14,7 +14,7 @@ import {
   Volume2,
   X,
   Lock,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   getCurrentUser,
   getCurrentUserRole,
@@ -26,19 +26,19 @@ import {
   getTestParts,
   saveListeningPracticeTracking,
   submitAttempt,
-} from '@/lib/api';
-import type { QuestionModel, TestPartModel } from '@/lib/types';
+} from "@/lib/api";
+import type { QuestionModel, TestPartModel } from "@/lib/types";
 
 function ExamQuestionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const testId = searchParams.get('testId') || '';
-  const testTitle = searchParams.get('title') || 'Test';
-  const practiceMode = searchParams.get('practice') === 'true';
-  const partId = searchParams.get('partId') || '';
-  const partNumber = parseInt(searchParams.get('partNumber') || '0', 10);
-  const source = searchParams.get('source') || '';
-  const questionLimit = parseInt(searchParams.get('questionLimit') || '0', 10);
+  const testId = searchParams.get("testId") || "";
+  const testTitle = searchParams.get("title") || "Test";
+  const practiceMode = searchParams.get("practice") === "true";
+  const partId = searchParams.get("partId") || "";
+  const partNumber = parseInt(searchParams.get("partNumber") || "0", 10);
+  const source = searchParams.get("source") || "";
+  const questionLimit = parseInt(searchParams.get("questionLimit") || "0", 10);
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [parts, setParts] = useState<TestPartModel[]>([]);
@@ -59,10 +59,10 @@ function ExamQuestionContent() {
     async function load() {
       try {
         let loadedQuestions: QuestionModel[] = [];
-        if (practiceMode && source === 'wrong') {
+        if (practiceMode && source === "wrong") {
           let wrongIds: string[] = [];
-          if (typeof window !== 'undefined') {
-            const raw = sessionStorage.getItem('practice_wrong_question_ids');
+          if (typeof window !== "undefined") {
+            const raw = sessionStorage.getItem("practice_wrong_question_ids");
             if (raw) {
               try {
                 wrongIds = JSON.parse(raw) as string[];
@@ -92,7 +92,7 @@ function ExamQuestionContent() {
           getCurrentUserRole(),
         ]);
 
-        const premiumUser = role === 'premium' || role === 'admin';
+        const premiumUser = role === "premium" || role === "admin";
         const blockedByTest = Boolean(test?.is_premium) && !premiumUser;
         if (blockedByTest) {
           setHasAccess(false);
@@ -114,7 +114,7 @@ function ExamQuestionContent() {
   useEffect(() => {
     if (practiceMode) return;
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
+      setTimeLeft((prev) => {
         if (prev <= 0) {
           clearInterval(interval);
           handleSubmit();
@@ -134,30 +134,30 @@ function ExamQuestionContent() {
     const onTime = () => setAudioProgress(audio.currentTime);
     const onLoaded = () => setAudioDuration(audio.duration);
     const onEnded = () => setIsPlaying(false);
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onLoaded);
-    audio.addEventListener('ended', onEnded);
+    audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("loadedmetadata", onLoaded);
+    audio.addEventListener("ended", onEnded);
     return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onLoaded);
-      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("ended", onEnded);
     };
   }, [currentIndex]);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
 
   const currentQuestion = questions[currentIndex];
-  const currentPart = parts.find(p => p.id === currentQuestion?.part_id);
+  const currentPart = parts.find((p) => p.id === currentQuestion?.part_id);
 
-  const audioUrl = currentQuestion?.media?.find(m => m.type === 'audio')?.url;
-  const imageUrl = currentQuestion?.media?.find(m => m.type === 'image')?.url;
+  const audioUrl = currentQuestion?.media?.find((m) => m.type === "audio")?.url;
+  const imageUrl = currentQuestion?.media?.find((m) => m.type === "image")?.url;
 
   const selectAnswer = (optionIndex: number) => {
-    setUserAnswers(prev => ({ ...prev, [currentIndex]: optionIndex }));
+    setUserAnswers((prev) => ({ ...prev, [currentIndex]: optionIndex }));
   };
 
   const goNext = () => {
@@ -200,7 +200,7 @@ function ExamQuestionContent() {
     let readingTotal = 0;
 
     questions.forEach((q, i) => {
-      const part = parts.find(p => p.id === q.part_id);
+      const part = parts.find((p) => p.id === q.part_id);
       const isListening = part && part.part_number <= 4;
       if (isListening) {
         listeningTotal++;
@@ -217,19 +217,36 @@ function ExamQuestionContent() {
       }
     });
 
-    const listeningScore = Math.round((listeningCorrect / Math.max(listeningTotal, 1)) * 495);
-    const readingScore = Math.round((readingCorrect / Math.max(readingTotal, 1)) * 495);
+    const listeningScore = Math.round(
+      (listeningCorrect / Math.max(listeningTotal, 1)) * 495,
+    );
+    const readingScore = Math.round(
+      (readingCorrect / Math.max(readingTotal, 1)) * 495,
+    );
 
-    return { listeningScore, readingScore, totalCorrect: listeningCorrect + readingCorrect };
+    return {
+      listeningScore,
+      readingScore,
+      totalCorrect: listeningCorrect + readingCorrect,
+    };
   }, [questions, parts, userAnswers]);
 
   const handleSubmit = useCallback(async () => {
     if (practiceMode) {
       let correct = 0;
-      const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
+      const answerRows: {
+        question_id: string;
+        option_id: string;
+        is_correct: boolean;
+      }[] = [];
       questions.forEach((q, i) => {
         const selectedIdx = userAnswers[i];
-        if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
+        if (
+          selectedIdx === undefined ||
+          selectedIdx < 0 ||
+          selectedIdx >= q.options.length
+        )
+          return;
         const selected = q.options[selectedIdx];
         if (selected?.is_correct) correct += 1;
         answerRows.push({
@@ -254,15 +271,15 @@ function ExamQuestionContent() {
         title: testTitle,
         correct: String(correct),
         total: String(questions.length),
-        section: partNumber >= 5 ? 'reading' : 'listening',
-        practice: 'true',
+        section: partNumber >= 5 ? "reading" : "listening",
+        practice: "true",
         source,
       });
-      if (partId) params.set('partId', partId);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
+      if (partId) params.set("partId", partId);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("exam_answers", JSON.stringify(userAnswers));
         sessionStorage.setItem(
-          'practice_question_ids',
+          "practice_question_ids",
           JSON.stringify(questions.map((q) => q.id)),
         );
       }
@@ -271,10 +288,19 @@ function ExamQuestionContent() {
     }
 
     const { listeningScore, readingScore, totalCorrect } = calculateScores();
-    const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
+    const answerRows: {
+      question_id: string;
+      option_id: string;
+      is_correct: boolean;
+    }[] = [];
     questions.forEach((q, i) => {
       const selectedIdx = userAnswers[i];
-      if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
+      if (
+        selectedIdx === undefined ||
+        selectedIdx < 0 ||
+        selectedIdx >= q.options.length
+      )
+        return;
       const selected = q.options[selectedIdx];
       answerRows.push({
         question_id: q.id,
@@ -286,7 +312,12 @@ function ExamQuestionContent() {
     const user = await getCurrentUser();
     if (user && answerRows.length > 0) {
       try {
-        await submitAttempt(user.id, testId, listeningScore + readingScore, answerRows);
+        await submitAttempt(
+          user.id,
+          testId,
+          listeningScore + readingScore,
+          answerRows,
+        );
       } catch {
         // Keep UX smooth even if persistence fails.
       }
@@ -301,11 +332,22 @@ function ExamQuestionContent() {
       totalQuestions: String(questions.length),
     });
     // Store answers in sessionStorage for the result page
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("exam_answers", JSON.stringify(userAnswers));
     }
     router.push(`/home/exam/score?${params.toString()}`);
-  }, [calculateScores, partId, partNumber, practiceMode, questions, router, source, testId, testTitle, userAnswers]);
+  }, [
+    calculateScores,
+    partId,
+    partNumber,
+    practiceMode,
+    questions,
+    router,
+    source,
+    testId,
+    testTitle,
+    userAnswers,
+  ]);
 
   if (loading) {
     return (
@@ -324,9 +366,11 @@ function ExamQuestionContent() {
         <div className="bg-white border border-amber-200 rounded-2xl p-6 text-center max-w-md">
           <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
           <h3 className="font-bold text-slate-800 mb-1">Nội dung Premium</h3>
-          <p className="text-sm text-slate-500 mb-4">Tài khoản hiện tại chưa có quyền truy cập bài thi này.</p>
+          <p className="text-sm text-slate-500 mb-4">
+            Tài khoản hiện tại chưa có quyền truy cập bài thi này.
+          </p>
           <button
-            onClick={() => router.push('/home/upgrade')}
+            onClick={() => router.push("/home/upgrade")}
             className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
           >
             Nâng cấp Premium
@@ -341,7 +385,10 @@ function ExamQuestionContent() {
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <p className="text-slate-500">Không có câu hỏi nào</p>
-          <button onClick={() => router.back()} className="text-primary font-medium mt-2 hover:underline">
+          <button
+            onClick={() => router.back()}
+            className="text-primary font-medium mt-2 hover:underline"
+          >
             Quay lại
           </button>
         </div>
@@ -352,70 +399,84 @@ function ExamQuestionContent() {
   return (
     <div className="pb-20 lg:pb-8">
       {/* Header */}
-     <div className='sm:px-10'>
-      <div className="sticky top-20 z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (confirm('Bạn có chắc muốn thoát? Bài làm sẽ không được lưu.')) {
-                  router.back();
-                }
-              }}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-slate-600" />
-            </button>
-            <div>
-              <h3 className="font-semibold text-slate-800 text-sm">{testTitle}</h3>
-              {currentPart && (
-                <p className="text-xs text-slate-500">Part {currentPart.part_number}</p>
-              )}
+      <div className="sm:px-10">
+        <div className="sticky top-20 z-10 bg-white/90 backdrop-blur-md -mx-4 sm:-mx-10 py-3 mb-6 rounded-2xl px-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (
+                    confirm(
+                      "Bạn có chắc muốn thoát? Bài làm sẽ không được lưu.",
+                    )
+                  ) {
+                    router.back();
+                  }
+                }}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-slate-600" />
+              </button>
+              <div>
+                <h3 className="font-semibold text-slate-800 text-sm">
+                  {testTitle}
+                </h3>
+                {currentPart && (
+                  <p className="text-xs text-slate-500">
+                    Part {currentPart.part_number}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Timer */}
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
+                  timeLeft < 300
+                    ? "bg-red-100 text-red-600"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                {practiceMode ? "Practice" : formatTime(timeLeft)}
+              </div>
+
+              {/* Overview */}
+              <button
+                onClick={() => setShowOverview(!showOverview)}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <Grid3X3 className="w-5 h-5 text-slate-600" />
+              </button>
+
+              {/* Submit */}
+              <button
+                onClick={() => setShowSubmitDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-dark transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                <span className="hidden sm:inline">Nộp bài</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Timer */}
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
-              timeLeft < 300 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-700'
-            }`}>
-              <Clock className="w-4 h-4" />
-              {practiceMode ? 'Practice' : formatTime(timeLeft)}
+          {/* Progress bar */}
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{
+                  width: `${((currentIndex + 1) / questions.length) * 100}%`,
+                }}
+              />
             </div>
-
-            {/* Overview */}
-            <button
-              onClick={() => setShowOverview(!showOverview)}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              <Grid3X3 className="w-5 h-5 text-slate-600" />
-            </button>
-
-            {/* Submit */}
-            <button
-              onClick={() => setShowSubmitDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-dark transition-colors"
-            >
-              <Send className="w-4 h-4" />
-              <span className="hidden sm:inline">Nộp bài</span>
-            </button>
+            <span className="text-xs text-slate-500 shrink-0">
+              {currentIndex + 1}/{questions.length}
+            </span>
           </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
-              style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-            />
-          </div>
-          <span className="text-xs text-slate-500 shrink-0">
-            {currentIndex + 1}/{questions.length}
-          </span>
         </div>
       </div>
-     </div>
 
       {/* Main content - Web layout: side by side */}
       <div className="grid lg:grid-cols-2 gap-6">
@@ -434,7 +495,11 @@ function ExamQuestionContent() {
                   onClick={togglePlay}
                   className="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:bg-primary-dark transition-colors"
                 >
-                  {isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5 text-white" />
+                  ) : (
+                    <Play className="w-5 h-5 text-white ml-0.5" />
+                  )}
                 </button>
                 <div className="flex-1">
                   <input
@@ -458,14 +523,20 @@ function ExamQuestionContent() {
           {imageUrl && (
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="Question" className="w-full rounded-xl h-auto" />
+              <img
+                src={imageUrl}
+                alt="Question"
+                className="w-full rounded-xl h-auto"
+              />
             </div>
           )}
 
           {/* Passage */}
           {currentQuestion?.passage && (
             <div className="bg-white rounded-2xl border border-slate-100 p-6">
-              <h4 className="font-semibold text-slate-800 mb-3">{currentQuestion.passage.title}</h4>
+              <h4 className="font-semibold text-slate-800 mb-3">
+                {currentQuestion.passage.title}
+              </h4>
               <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-100 overflow-y-auto">
                 {currentQuestion.passage.content}
               </div>
@@ -474,7 +545,9 @@ function ExamQuestionContent() {
 
           {!audioUrl && !imageUrl && !currentQuestion?.passage && (
             <div className="bg-slate-50 rounded-2xl p-8 text-center">
-              <p className="text-slate-400 text-sm">Không có tài liệu đính kèm</p>
+              <p className="text-slate-400 text-sm">
+                Không có tài liệu đính kèm
+              </p>
             </div>
           )}
         </div>
@@ -488,7 +561,9 @@ function ExamQuestionContent() {
                 {currentIndex + 1}
               </span>
               {currentPart && (
-                <span className="text-xs text-slate-400">Part {currentPart.part_number}</span>
+                <span className="text-xs text-slate-400">
+                  Part {currentPart.part_number}
+                </span>
               )}
             </div>
 
@@ -503,26 +578,35 @@ function ExamQuestionContent() {
             <div className="space-y-3">
               {currentQuestion?.options.map((option, idx) => {
                 const isSelected = userAnswers[currentIndex] === idx;
-                const labels = ['A', 'B', 'C', 'D'];
-                const isPart1Or2 = currentPart && (currentPart.part_number === 1 || currentPart.part_number === 2);
-                
+                const labels = ["A", "B", "C", "D"];
+                const isPart1Or2 =
+                  currentPart &&
+                  (currentPart.part_number === 1 ||
+                    currentPart.part_number === 2);
+
                 return (
                   <button
                     key={option.id}
                     onClick={() => selectAnswer(idx)}
                     className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
                       isSelected
-                        ? 'border-primary bg-teal-50'
-                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                        ? "border-primary bg-teal-50"
+                        : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isSelected ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
-                    }`}>
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
+                        isSelected
+                          ? "bg-primary text-white"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
                       {labels[idx]}
                     </span>
                     {!isPart1Or2 && (
-                      <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
+                      <span
+                        className={`text-sm ${isSelected ? "text-primary font-medium" : "text-slate-700"}`}
+                      >
                         {option.content}
                       </span>
                     )}
@@ -542,7 +626,9 @@ function ExamQuestionContent() {
               <ChevronLeft className="w-4 h-4" />
               Câu trước
             </button>
-            <span className="text-sm text-slate-500">{answeredCount}/{questions.length} đã trả lời</span>
+            <span className="text-sm text-slate-500">
+              {answeredCount}/{questions.length} đã trả lời
+            </span>
             <button
               onClick={goNext}
               disabled={currentIndex === questions.length - 1}
@@ -558,11 +644,19 @@ function ExamQuestionContent() {
       {/* Question Overview Panel */}
       {showOverview && (
         <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowOverview(false)} />
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setShowOverview(false)}
+          />
           <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full lg:w-120 max-h-[80vh] overflow-auto p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-800">Tổng quan ({answeredCount}/{questions.length})</h3>
-              <button onClick={() => setShowOverview(false)} className="p-1 hover:bg-slate-100 rounded-xl">
+              <h3 className="font-bold text-slate-800">
+                Tổng quan ({answeredCount}/{questions.length})
+              </h3>
+              <button
+                onClick={() => setShowOverview(false)}
+                className="p-1 hover:bg-slate-100 rounded-xl"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -573,13 +667,16 @@ function ExamQuestionContent() {
                 return (
                   <button
                     key={i}
-                    onClick={() => { setCurrentIndex(i); setShowOverview(false); }}
+                    onClick={() => {
+                      setCurrentIndex(i);
+                      setShowOverview(false);
+                    }}
                     className={`w-full aspect-square rounded-lg flex items-center justify-center text-xs font-semibold transition-all ${
                       isCurrent
-                        ? 'bg-primary text-white ring-2 ring-primary/30'
+                        ? "bg-primary text-white ring-2 ring-primary/30"
                         : answered
-                          ? 'bg-teal-100 text-primary'
-                          : 'bg-slate-100 text-slate-400'
+                          ? "bg-teal-100 text-primary"
+                          : "bg-slate-100 text-slate-400"
                     }`}
                   >
                     {i + 1}
@@ -588,12 +685,21 @@ function ExamQuestionContent() {
               })}
             </div>
             <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-teal-100 rounded" /> Đã trả lời</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-slate-100 rounded" /> Chưa trả lời</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-primary rounded" /> Đang xem</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 bg-teal-100 rounded" /> Đã trả lời
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 bg-slate-100 rounded" /> Chưa trả lời
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 bg-primary rounded" /> Đang xem
+              </span>
             </div>
             <button
-              onClick={() => { setShowOverview(false); setShowSubmitDialog(true); }}
+              onClick={() => {
+                setShowOverview(false);
+                setShowSubmitDialog(true);
+              }}
               className="w-full mt-4 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary-dark transition-colors"
             >
               Nộp bài ({answeredCount}/{questions.length})
@@ -605,7 +711,10 @@ function ExamQuestionContent() {
       {/* Submit confirmation dialog */}
       {showSubmitDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowSubmitDialog(false)} />
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setShowSubmitDialog(false)}
+          />
           <div className="relative bg-white rounded-2xl w-full max-w-sm mx-4 p-6 text-center">
             <Send className="w-12 h-12 text-primary mx-auto mb-3" />
             <h3 className="font-bold text-slate-800 text-lg mb-2">Nộp bài?</h3>
@@ -640,7 +749,13 @@ function ExamQuestionContent() {
 
 export default function ExamQuestionPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      }
+    >
       <ExamQuestionContent />
     </Suspense>
   );
