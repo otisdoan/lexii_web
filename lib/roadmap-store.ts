@@ -25,7 +25,12 @@ export interface RoadmapState {
   isDurationDisabled: (days: DurationDays) => boolean;
 }
 
-const defaultState = {
+type RoadmapPersisted = Pick<
+  RoadmapState,
+  'targetScore' | 'selfAssessedLevel' | 'placementScore' | 'placementAttemptId' | 'durationDays' | 'userRoadmapId'
+>;
+
+const defaultState: RoadmapPersisted = {
   targetScore: null,
   selfAssessedLevel: null,
   placementScore: null,
@@ -53,7 +58,7 @@ function loadPersisted(): Partial<RoadmapState> {
   }
 }
 
-function persist(state: typeof defaultState) {
+function persist(state: RoadmapPersisted) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(ROADMAP_STORAGE_KEY, JSON.stringify(state));
