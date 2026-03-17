@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, Users, Crown, User, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Crown, User, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface UserRow {
@@ -11,6 +11,7 @@ interface UserRow {
   role: string;
   avatar_url: string;
   created_at: string;
+  premium_expires_at?: string | null;
   email?: string;
 }
 
@@ -18,6 +19,7 @@ const PAGE_SIZE = 15;
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [premiumStartByUser, setPremiumStartByUser] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'premium' | 'user'>('all');
@@ -38,8 +40,31 @@ export default function AdminUsersPage() {
 
       const { data, count, error } = await query;
       if (error) throw error;
-      setUsers((data as UserRow[]) || []);
+      const rows = (data as UserRow[]) || [];
+      setUsers(rows);
       setTotal(count ?? 0);
+
+      const userIds = rows.map((u) => u.id);
+      if (userIds.length === 0) {
+        setPremiumStartByUser({});
+      } else {
+        const { data: paidOrders, error: paidOrdersError } = await supabase
+          .from('subscription_orders')
+          .select('user_id,paid_at,status')
+          .in('user_id', userIds)
+          .eq('status', 'paid')
+          .order('paid_at', { ascending: true });
+
+        if (paidOrdersError) throw paidOrdersError;
+
+        const startMap: Record<string, string | null> = {};
+        for (const row of (paidOrders || []) as Array<{ user_id: string; paid_at: string | null }>) {
+          if (!startMap[row.user_id]) {
+            startMap[row.user_id] = row.paid_at;
+          }
+        }
+        setPremiumStartByUser(startMap);
+      }
     } catch {
       //
     } finally {
@@ -66,6 +91,17 @@ export default function AdminUsersPage() {
     if (role === 'admin') return 'bg-red-100 text-red-600';
     if (role === 'premium') return 'bg-amber-100 text-amber-600';
     return 'bg-slate-100 text-slate-500';
+  };
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -118,6 +154,7 @@ export default function AdminUsersPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Người dùng</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Điện thoại</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Premium</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ngày tạo</th>
                 <th className="px-5 py-3" />
               </tr>
@@ -129,12 +166,13 @@ export default function AdminUsersPage() {
                     <td className="px-5 py-3.5"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-slate-100" /><div className="h-3.5 w-32 bg-slate-100 rounded" /></div></td>
                     <td className="px-5 py-3.5"><div className="h-3.5 w-24 bg-slate-100 rounded" /></td>
                     <td className="px-5 py-3.5"><div className="h-5 w-16 bg-slate-100 rounded-full" /></td>
+                    <td className="px-5 py-3.5"><div className="h-3.5 w-28 bg-slate-100 rounded" /></td>
                     <td className="px-5 py-3.5"><div className="h-3.5 w-20 bg-slate-100 rounded" /></td>
                     <td className="px-5 py-3.5" />
                   </tr>
                 ))
               ) : users.length === 0 ? (
-                <tr><td colSpan={5} className="text-center text-slate-400 py-12">Không có người dùng nào</td></tr>
+                <tr><td colSpan={6} className="text-center text-slate-400 py-12">Không có người dùng nào</td></tr>
               ) : (
                 users.map(user => (
                   <tr key={user.id} className="hover:bg-slate-50/40 transition-colors">
@@ -162,6 +200,16 @@ export default function AdminUsersPage() {
                         <option value="premium">premium</option>
                         <option value="admin">admin</option>
                       </select>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-500">
+                      {user.role === 'premium' ? (
+                        <div className="space-y-0.5">
+                          <p>Bắt đầu: {formatDate(premiumStartByUser[user.id])}</p>
+                          <p>Hết hạn: {user.premium_expires_at ? formatDate(user.premium_expires_at) : 'Trọn đời'}</p>
+                        </div>
+                      ) : (
+                        <span>—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-slate-400 text-xs">
                       {new Date(user.created_at).toLocaleDateString('vi-VN')}

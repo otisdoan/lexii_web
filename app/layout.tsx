@@ -10,8 +10,12 @@ const lexend = Lexend({
 
 export const metadata: Metadata = {
   title: "Lexii TOEIC® - Luyện thi TOEIC hiệu quả",
-  description: "Ứng dụng luyện thi TOEIC thông minh với đầy đủ bài thi thử, luyện nghe, đọc, viết, nói và kiến thức ngữ pháp, từ vựng.",
-  icons: { icon: "/favicon.ico" },
+  description: "Website luyện thi TOEIC thông minh với đầy đủ bài thi thử, luyện nghe, đọc, viết, nói và kiến thức ngữ pháp, từ vựng.",
+  icons: {
+    icon: "/icon.png?v=4",
+    shortcut: "/icon.png?v=4",
+    apple: "/apple-icon.png?v=4",
+  },
 };
 
 export default function RootLayout({

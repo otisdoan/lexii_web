@@ -92,11 +92,9 @@
   @keyframes premium-rainbow-flow {
     0% {
       background-position: 0% 50%;
-      filter: hue-rotate(0deg);
     }
     100% {
       background-position: 300% 50%;
-      filter: hue-rotate(360deg);
     }
   }
 

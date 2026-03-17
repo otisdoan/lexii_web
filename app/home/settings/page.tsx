@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Edit3, BookOpen, Globe, Moon, Hand, Monitor, Download, Bell,
-  Users, Share2, MessageCircle, Star, ChevronRight, LogOut,
+  Users, Share2, MessageCircle, Star, ChevronRight, LogOut, History,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getUserStats } from '@/lib/api';
+import { getCurrentUserPremiumSubscriptionInfo, getUserStats } from '@/lib/api';
 
 interface SettingsItem {
   icon: React.ReactNode;
@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [user, setUser] = useState<{ name: string; email: string; avatar?: string } | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [stats, setStats] = useState<{ totalTests: number; bestScore: number } | null>(null);
+  const [premiumInfo, setPremiumInfo] = useState<{ startedAt: string | null; expiresAt: string | null; isLifetime: boolean } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
@@ -42,9 +43,29 @@ export default function SettingsPage() {
         });
         setIsPremium(profile?.role === 'premium');
         getUserStats(u.id).then(s => setStats(s)).catch(() => {});
+        getCurrentUserPremiumSubscriptionInfo()
+          .then((info) => {
+            if (info) {
+              setPremiumInfo({
+                startedAt: info.startedAt,
+                expiresAt: info.expiresAt,
+                isLifetime: info.isLifetime,
+              });
+            } else {
+              setPremiumInfo(null);
+            }
+          })
+          .catch(() => setPremiumInfo(null));
       }
     });
   }, []);
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -75,6 +96,7 @@ export default function SettingsPage() {
   ];
 
   const group2: SettingsItem[] = [
+    { icon: <History className={iconClass} />, label: 'Lịch sử bài làm đề thi', onClick: () => router.push('/home/settings/test-history') },
     { icon: <Hand className={iconClass} />, label: 'Giao diện đáp án', onClick: comingSoon },
     { icon: <Monitor className={iconClass} />, label: 'Hiển thị', onClick: comingSoon },
     { icon: <Download className={iconClass} />, label: 'Quản lý tải xuống', onClick: comingSoon },
@@ -118,7 +140,17 @@ export default function SettingsPage() {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-slate-800 truncate">{user?.name || 'Người dùng'}</p>
               {user?.email && <p className="text-xs text-slate-500 truncate">{user.email}</p>}
-              {isPremium && <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Thành viên đã kích hoạt</p>}
+              {isPremium && (
+                <>
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Thành viên đã kích hoạt</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Bắt đầu: {formatDate(premiumInfo?.startedAt)}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Hết hạn: {premiumInfo?.isLifetime ? 'Trọn đời' : formatDate(premiumInfo?.expiresAt)}
+                  </p>
+                </>
+              )}
               <Link href="/home/settings/profile" className="inline-block mt-1 text-xs text-primary font-medium hover:underline">
                 Chỉnh sửa hồ sơ →
               </Link>

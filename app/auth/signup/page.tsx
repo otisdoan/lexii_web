@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
 import { signUp, signInWithGoogle } from '@/lib/api';
 
@@ -51,7 +52,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-white to-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-teal-50 via-white to-slate-50">
       <div className="w-full max-w-md mx-auto px-6 py-12">
         {/* Back */}
         <button
@@ -64,8 +65,8 @@ export default function SignUpPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-dark mx-auto flex items-center justify-center mb-4 shadow-md">
-            <span className="text-white font-bold text-xl">L</span>
+          <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 shadow-md border border-slate-200">
+            <Image src="/lexii.jpg" alt="Lexii logo" width={64} height={64} className="w-full h-full object-cover" priority />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-1">Tạo tài khoản mới</h1>
           <p className="text-slate-500 text-sm">Bắt đầu hành trình TOEIC cùng Lexii</p>

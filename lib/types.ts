@@ -76,6 +76,27 @@ export interface AnswerModel {
   is_correct: boolean;
 }
 
+export interface AttemptHistoryItem {
+  id: string;
+  testId: string;
+  testTitle: string;
+  score: number;
+  submittedAt: string;
+  answeredCount: number;
+  correctCount: number;
+}
+
+export interface AttemptDetail {
+  id: string;
+  testId: string;
+  testTitle: string;
+  score: number;
+  submittedAt: string;
+  questions: QuestionModel[];
+  selectedOptionIdByQuestionId: Record<string, string>;
+  correctCount: number;
+}
+
 // ========== Vocabulary & Grammar ==========
 export interface VocabularyModel {
   id: string;
@@ -142,4 +163,52 @@ export interface PracticePart {
   color: string;
   bgColor: string;
   progress: number;
+}
+
+// ========== AI Speaking/Writing ==========
+export interface AiGradeResult {
+  overall: number;
+  taskScores: Record<string, number>;
+  errors: string[];
+  feedback: string;
+  importantWords: string[];
+  suggestedAnswer: string;
+}
+
+// ========== Subscription / Transactions ==========
+export interface SubscriptionTransactionItem {
+  id: string;
+  userId: string;
+  userName: string;
+  userPhone: string | null;
+  planId: string;
+  planName: string;
+  amount: number;
+  currency: string;
+  orderCode: number;
+  status: string;
+  provider: string;
+  isLifetime: boolean;
+  paidAt: string | null;
+  createdAt: string;
+  grantedUntil: string | null;
+  premiumExpiresAt: string | null;
+}
+
+export interface UserPremiumSubscriptionInfo {
+  startedAt: string | null;
+  expiresAt: string | null;
+  isLifetime: boolean;
+  planName: string | null;
+}
+
+export interface NotificationItem {
+  id: string;
+  recipientUserId: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
 }

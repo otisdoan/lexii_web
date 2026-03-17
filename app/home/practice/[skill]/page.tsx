@@ -346,25 +346,47 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
 
             {/* Static parts for speaking/writing */}
             {(skill === 'speaking' || (skill === 'writing' && readingParts.length === 0)) && (
-              Object.entries(descriptions).map(([num, desc]) => (
-                <div
+              Object.entries(descriptions).map(([num, desc], index) => {
+                const partNumber = Number(num);
+                const locked = isPartLocked(partNumber, index);
+                const href = skill === 'speaking'
+                  ? `/home/practice/speaking-question?partNumber=${partNumber}&title=${encodeURIComponent(desc.title)}`
+                  : `/home/practice/writing-question?partNumber=${partNumber}&title=${encodeURIComponent(desc.title)}`;
+
+                return (
+                <button
                   key={num}
-                  className="flex items-center gap-4 bg-white rounded-xl border border-slate-100 p-4 opacity-70"
+                  type="button"
+                  onClick={() => {
+                    if (locked) {
+                      router.push('/home/upgrade');
+                      return;
+                    }
+                    router.push(href);
+                  }}
+                  className={`w-full flex items-center gap-4 bg-white rounded-xl border p-4 transition-all text-left group ${
+                    locked
+                      ? 'border-amber-200 bg-amber-50/40'
+                      : 'border-slate-100 hover:shadow-sm hover:border-primary/20'
+                  }`}
                 >
-                  <div className={`w-12 h-12 ${config.bgColor} rounded-xl flex items-center justify-center shrink-0`}>
+                  <div className={`w-12 h-12 ${config.bgColor} rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
                     <Icon className={`w-6 h-6 ${config.textColor}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-slate-800 text-sm">{desc.title}</h4>
                     <p className="text-xs text-slate-500 mt-0.5">{desc.description}</p>
                   </div>
-                  {skill === 'speaking' ? (
-                    <span className="text-xs text-slate-400 flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Sắp ra mắt</span>
+                  {locked ? (
+                    <span className="text-xs text-amber-700 font-semibold flex items-center gap-1 shrink-0">
+                      <Lock className="w-3.5 h-3.5" /> Premium
+                    </span>
                   ) : (
                     <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
                   )}
-                </div>
-              ))
+                </button>
+                );
+              })
             )}
 
             {readingParts.length === 0 && listeningParts.length === 0 && skill !== 'speaking' && skill !== 'writing' && (

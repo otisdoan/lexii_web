@@ -56,15 +56,7 @@ function TestStartContent() {
   return (
     <div className="pb-20 lg:pb-8">
       {/* Back */}
-      <div className="flex items-center mb-6">
-        <button
-          onClick={() => router.back()}
-          className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 text-slate-600" />
-        </button>
-        <h2 className=" text-slate-900">Chi tiết đề thi</h2>
-      </div>
+     
 
       <div className="max-w-lg mx-auto">
         {/* Card */}
