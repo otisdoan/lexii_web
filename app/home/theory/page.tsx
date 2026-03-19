@@ -24,7 +24,7 @@ export default function TheoryPage() {
   const [activeTab, setActiveTab] = useState<'vocab' | 'grammar'>('vocab');
 
   return (
-    <div className="pb-20 lg:pb-8">
+    <div className="w-full max-w-275 mx-auto pb-20 lg:pb-8 overflow-x-hidden">
       {/* Header */}
       <div className="bg-primary rounded-md">
         <div className="flex items-center px-4 py-3">
@@ -83,13 +83,13 @@ function VocabularyTab() {
   return (
     <div>
       {/* Controls */}
-      <div className="bg-slate-50 px-4 py-4 space-y-3">
-        <div className="flex gap-3">
+      <div className="bg-slate-50 px-3 sm:px-4 py-4 space-y-3">
+        <div className="flex gap-2 sm:gap-3">
           {/* Lesson dropdown */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <button
               onClick={() => setShowLessonPicker(!showLessonPicker)}
-              className="w-full h-10 px-4 bg-white border border-slate-200 rounded-full flex items-center justify-between text-sm text-slate-600"
+              className="w-full h-10 px-4 bg-white border border-slate-200 rounded-full flex items-center justify-between text-sm text-slate-600 min-w-0"
             >
               Bài {selectedLesson} <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
@@ -109,10 +109,10 @@ function VocabularyTab() {
           </div>
 
           {/* Score filter */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <button
               onClick={() => setShowScorePicker(!showScorePicker)}
-              className="w-full h-10 px-4 bg-white border border-slate-200 rounded-full flex items-center justify-between text-sm text-slate-600"
+              className="w-full h-10 px-4 bg-white border border-slate-200 rounded-full flex items-center justify-between text-sm text-slate-600 min-w-0"
             >
               {selectedScore} <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
@@ -133,12 +133,12 @@ function VocabularyTab() {
         </div>
 
         {/* Mode chips */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pb-1">
           {MODES.map((mode, i) => (
             <button
               key={mode}
               onClick={() => setSelectedMode(i)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors shadow-sm ${
+              className={`px-4 py-2 rounded-full text-xs font-semibold border transition-colors shadow-sm text-center ${
                 selectedMode === i
                   ? 'bg-primary text-white border-primary'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -197,9 +197,9 @@ function VocabListMode({ words }: { words: VocabularyModel[] }) {
   };
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-3 sm:p-4 space-y-3">
       {words.map(v => (
-        <div key={v.id} className="bg-white rounded-2xl p-4 shadow-sm flex gap-4">
+        <div key={v.id} className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm flex gap-2 sm:gap-4">
           {/* Play button */}
           <button className="w-11 h-11 bg-primary rounded-full flex items-center justify-center shrink-0">
             <Volume2 className="w-5 h-5 text-white" />
@@ -233,7 +233,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
   const word = words[index];
 
   return (
-    <div className="p-6 flex flex-col items-center min-h-125">
+    <div className="p-4 sm:p-6 flex flex-col items-center min-h-125">
       {/* Progress */}
       <div className="w-full flex items-center justify-between text-sm text-slate-500 mb-2">
         <span>{index + 1} / {words.length}</span>
@@ -249,7 +249,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
         className="w-full max-w-md flex-1 mb-6"
       >
         {!flipped ? (
-          <div className="bg-white rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-75">
+          <div className="bg-white rounded-3xl shadow-lg p-6 sm:p-8 flex flex-col items-center justify-center min-h-75">
             {word.word_class && (
               <span className="px-4 py-1 bg-teal-100 text-primary text-xs font-semibold rounded-full mb-5">{word.word_class}</span>
             )}
@@ -260,7 +260,7 @@ function FlashcardMode({ words }: { words: VocabularyModel[] }) {
             </p>
           </div>
         ) : (
-          <div className="bg-primary rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center min-h-75">
+          <div className="bg-primary rounded-3xl shadow-lg p-6 sm:p-8 flex flex-col items-center justify-center min-h-75">
             <p className="text-2xl font-bold text-white/80">{word.word}</p>
             <div className="w-16 h-px bg-white/25 my-6" />
             <p className="text-2xl font-semibold text-white text-center leading-relaxed">{word.definition}</p>
@@ -303,8 +303,8 @@ function OptionTile({ label, isAnswered, isCorrect, isSelected, onTap }: {
   else if (isAnswered && isSelected) { bg = 'bg-red-50'; border = 'border-red-500'; }
 
   return (
-    <button onClick={onTap} className={`w-full px-4 py-3.5 rounded-xl border ${bg} ${border} flex items-center justify-between text-left shadow-sm transition-all`}>
-      <span className="text-sm font-medium text-slate-800">{label}</span>
+    <button onClick={onTap} className={`w-full px-4 py-3.5 rounded-xl border ${bg} ${border} flex items-center justify-between gap-3 text-left shadow-sm transition-all`}>
+      <span className="text-sm font-medium text-slate-800 wrap-break-word min-w-0">{label}</span>
       {isAnswered && isCorrect && <CheckCircle className="w-5 h-5 text-green-500" />}
       {isAnswered && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500" />}
     </button>
@@ -346,11 +346,11 @@ function DefinitionQuizMode({ words }: { words: VocabularyModel[] }) {
 
   const word = words[index];
   return (
-    <div className="p-6 flex flex-col min-h-125">
+    <div className="p-4 sm:p-6 flex flex-col min-h-125">
       <QuizProgress index={index} total={words.length} correct={correct} />
-      <div className="bg-white rounded-2xl p-6 shadow-sm text-center my-4">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm text-center my-4">
         <p className="text-xs text-slate-400 mb-3">Từ nào có nghĩa là?</p>
-        <p className="text-xl font-semibold text-slate-800 leading-relaxed">{word.definition}</p>
+        <p className="text-xl font-semibold text-slate-800 leading-relaxed wrap-break-word">{word.definition}</p>
         {word.word_class && <span className="inline-block mt-2 px-3 py-0.5 bg-teal-100 text-primary text-[11px] font-semibold rounded-lg">{word.word_class}</span>}
       </div>
       <div className="space-y-2.5 flex-1">
@@ -402,11 +402,11 @@ function WordChoiceMode({ words }: { words: VocabularyModel[] }) {
 
   const word = words[index];
   return (
-    <div className="p-6 flex flex-col min-h-125">
+    <div className="p-4 sm:p-6 flex flex-col min-h-125">
       <QuizProgress index={index} total={words.length} correct={correct} />
-      <div className="bg-white rounded-2xl p-6 shadow-sm text-center my-4">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm text-center my-4">
         <p className="text-xs text-slate-400 mb-3">Nghĩa của từ này là?</p>
-        <p className="text-3xl font-bold text-slate-800">{word.word}</p>
+        <p className="text-3xl font-bold text-slate-800 wrap-break-word">{word.word}</p>
         {word.phonetic && <p className="text-sm italic text-slate-400 mt-1">{word.phonetic}</p>}
       </div>
       <div className="space-y-2.5 flex-1">
@@ -431,16 +431,16 @@ function SpeakingMode({ words }: { words: VocabularyModel[] }) {
   const word = words[index];
 
   return (
-    <div className="p-6 flex flex-col items-center min-h-125">
+    <div className="p-4 sm:p-6 flex flex-col items-center min-h-125">
       <div className="w-full flex items-center justify-between text-sm text-slate-500 mb-6">
         <span>{index + 1} / {words.length}</span>
         <span className="text-xs text-slate-400">Nghe và luyện phát âm</span>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm p-7 w-full max-w-md text-center mb-8">
-        <p className="text-4xl font-bold text-slate-800">{word.word}</p>
+      <div className="bg-white rounded-3xl shadow-sm p-5 sm:p-7 w-full max-w-md text-center mb-8">
+        <p className="text-4xl font-bold text-slate-800 wrap-break-word">{word.word}</p>
         {word.phonetic && <p className="text-base italic text-slate-400 mt-1">{word.phonetic}</p>}
-        <p className="text-sm text-slate-600 mt-4">{word.definition}</p>
+        <p className="text-sm text-slate-600 mt-4 wrap-break-word">{word.definition}</p>
         <button className="mt-5 w-13 h-13 bg-primary rounded-full flex items-center justify-center mx-auto">
           <Volume2 className="w-6 h-6 text-white" />
         </button>
@@ -506,9 +506,9 @@ function QuizProgress({ index, total, correct }: { index: number; total: number;
 function QuizResult({ correct, total, onRetry }: { correct: number; total: number; onRetry: () => void }) {
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
   return (
-    <div className="p-8 flex flex-col items-center justify-center min-h-100">
+    <div className="p-6 sm:p-8 flex flex-col items-center justify-center min-h-100">
       <p className={`text-6xl font-bold mb-2 ${pct >= 70 ? 'text-primary' : 'text-red-500'}`}>{pct}%</p>
-      <p className="text-sm text-slate-600">{correct} / {total} câu đúng</p>
+      <p className="text-sm text-slate-600 wrap-break-word text-center">{correct} / {total} câu đúng</p>
       <button onClick={onRetry} className="mt-6 px-8 py-3 bg-primary text-white rounded-xl font-semibold">
         Làm lại
       </button>
@@ -538,7 +538,7 @@ function GrammarTab() {
   }, [selectedLesson]);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-3 sm:p-4 space-y-4">
       {/* Lesson filter */}
       <div className="relative">
         <button
@@ -578,12 +578,12 @@ function GrammarTab() {
             <button
               key={g.id}
               onClick={() => setSelectedGrammar(g)}
-              className="w-full bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 text-left hover:border-primary/30 transition-colors"
+              className="w-full bg-white rounded-xl p-3 sm:p-4 border border-slate-100 shadow-sm flex items-center gap-3 sm:gap-4 text-left hover:border-primary/30 transition-colors"
             >
               <span className="w-10 h-10 rounded-full border-2 border-primary flex items-center justify-center text-sm font-bold text-primary shrink-0">
                 {i + 1}
               </span>
-              <span className="text-sm font-semibold text-slate-800 flex-1">{g.title}</span>
+              <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 wrap-break-word">{g.title}</span>
               <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
             </button>
           ))}
@@ -596,29 +596,29 @@ function GrammarTab() {
           <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedGrammar(null)} />
           <div className="relative bg-white rounded-t-3xl lg:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
             {/* Teal header */}
-            <div className="bg-primary px-5 py-5 flex items-start gap-3">
-              <h3 className="text-base font-semibold text-white flex-1 leading-snug">{selectedGrammar.title}</h3>
+            <div className="bg-primary px-4 sm:px-5 py-4 sm:py-5 flex items-start gap-3">
+              <h3 className="text-base font-semibold text-white flex-1 leading-snug wrap-break-word min-w-0">{selectedGrammar.title}</h3>
               <button onClick={() => setSelectedGrammar(null)} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm">✕</span>
               </button>
             </div>
             {/* Scrollable body */}
-            <div className="overflow-y-auto p-5 space-y-5">
-              <h4 className="text-lg font-bold text-[#3D6B64]">{selectedGrammar.title}</h4>
+            <div className="overflow-y-auto p-4 sm:p-5 space-y-5">
+              <h4 className="text-lg font-bold text-[#3D6B64] wrap-break-word">{selectedGrammar.title}</h4>
 
               {/* Formula */}
               {selectedGrammar.formula && (
                 <div>
                   <p className="text-xs font-semibold text-slate-500 tracking-wide mb-2">Công thức:</p>
                   <div className="bg-slate-50 border border-teal-100 rounded-2xl p-4 text-center">
-                    <p className="text-sm font-bold text-primary leading-relaxed">{selectedGrammar.formula}</p>
+                    <p className="text-sm font-bold text-primary leading-relaxed wrap-break-word">{selectedGrammar.formula}</p>
                   </div>
                 </div>
               )}
 
               {/* Content */}
               {!selectedGrammar.formula && selectedGrammar.content && (
-                <p className="text-sm text-slate-600 leading-relaxed">{selectedGrammar.content}</p>
+                <p className="text-sm text-slate-600 leading-relaxed wrap-break-word">{selectedGrammar.content}</p>
               )}
 
               {/* Examples */}
@@ -629,7 +629,7 @@ function GrammarTab() {
                     {selectedGrammar.examples.map((ex, i) => (
                       <div key={i} className="flex gap-3">
                         <span className="w-2 h-2 bg-primary rounded-full mt-2 shrink-0" />
-                        <p className="text-sm italic text-slate-600 leading-relaxed">{ex}</p>
+                        <p className="text-sm italic text-slate-600 leading-relaxed wrap-break-word">{ex}</p>
                       </div>
                     ))}
                   </div>
@@ -644,7 +644,7 @@ function GrammarTab() {
                     {selectedGrammar.related_topics.map((topic, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <span>👉</span>
-                        <span className="text-sm font-medium text-primary">{topic}</span>
+                        <span className="text-sm font-medium text-primary wrap-break-word">{topic}</span>
                       </div>
                     ))}
                   </div>

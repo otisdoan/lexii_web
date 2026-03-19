@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Edit3, BookOpen, Globe, Moon, Hand, Monitor, Download, Bell,
-  Users, Share2, MessageCircle, Star, ChevronRight, LogOut, History,
+  Users, Share2, MessageCircle, Star, ChevronRight, LogOut, LogIn, History,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUserPremiumSubscriptionInfo, getUserStats } from '@/lib/api';
@@ -120,47 +120,58 @@ export default function SettingsPage() {
       <div className="px-4 py-4 space-y-4">
         {/* Profile section */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="relative">
-              <div className={isPremium ? 'p-1 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.2)]' : ''}>
-                {user?.avatar ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={user.avatar}
-                    alt="avatar"
-                    className={`w-14 h-14 rounded-full object-cover ${isPremium ? 'border-2 border-white' : ''}`}
-                  />
-                ) : (
-                  <div className={`w-14 h-14 rounded-full bg-teal-100 flex items-center justify-center text-xl font-bold text-primary ${isPremium ? 'border-2 border-white' : ''}`}>
-                    {user?.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
+          <div className="mb-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+              <div className="relative shrink-0">
+                <div className={isPremium ? 'p-1 rounded-full premium-avatar-ring shadow-[0_0_0_2px_rgba(251,191,36,0.2)]' : ''}>
+                  {user?.avatar ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={user.avatar}
+                      alt="avatar"
+                      className={`w-14 h-14 rounded-full object-cover ${isPremium ? 'border-2 border-white' : ''}`}
+                    />
+                  ) : (
+                    <div className={`w-14 h-14 rounded-full bg-teal-100 flex items-center justify-center text-xl font-bold text-primary ${isPremium ? 'border-2 border-white' : ''}`}>
+                      {user?.name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-800 truncate">{user?.name || 'Người dùng'}</p>
+                {user?.email && <p className="text-xs text-slate-500 truncate">{user.email}</p>}
+                {isPremium && (
+                  <>
+                    <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Thành viên đã kích hoạt</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Bắt đầu: {formatDate(premiumInfo?.startedAt)}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Hết hạn: {premiumInfo?.isLifetime ? 'Trọn đời' : formatDate(premiumInfo?.expiresAt)}
+                    </p>
+                  </>
                 )}
+                <Link href="/home/settings/profile" className="inline-block mt-1 text-xs text-primary font-medium hover:underline">
+                  Chỉnh sửa hồ sơ →
+                </Link>
               </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 truncate">{user?.name || 'Người dùng'}</p>
-              {user?.email && <p className="text-xs text-slate-500 truncate">{user.email}</p>}
-              {isPremium && (
-                <>
-                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Thành viên đã kích hoạt</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Bắt đầu: {formatDate(premiumInfo?.startedAt)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Hết hạn: {premiumInfo?.isLifetime ? 'Trọn đời' : formatDate(premiumInfo?.expiresAt)}
-                  </p>
-                </>
-              )}
-              <Link href="/home/settings/profile" className="inline-block mt-1 text-xs text-primary font-medium hover:underline">
-                Chỉnh sửa hồ sơ →
+            {user ? (
+              <button
+                onClick={() => setShowLogoutDialog(true)}
+                className="w-full sm:w-auto px-4 py-2 border border-orange-300 text-orange-500 rounded-full text-sm font-semibold hover:bg-orange-50 transition-colors inline-flex items-center justify-center gap-1"
+              >
+                <LogOut className="w-4 h-4" /> Đăng xuất
+              </button>
+            ) : (
+              <Link
+                href="/auth/login"
+                className="w-full sm:w-auto px-4 py-2 border border-primary/40 text-primary rounded-full text-sm font-semibold hover:bg-primary/10 transition-colors inline-flex items-center justify-center gap-1"
+              >
+                <LogIn className="w-4 h-4" /> Đăng nhập
               </Link>
-            </div>
-            <button
-              onClick={() => setShowLogoutDialog(true)}
-              className="px-4 py-2 border border-orange-300 text-orange-500 rounded-full text-sm font-semibold hover:bg-orange-50 transition-colors flex items-center gap-1"
-            >
-              <LogOut className="w-4 h-4" /> Đăng xuất
-            </button>
+            )}
           </div>
           {stats && (
             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-50">
@@ -188,7 +199,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Logout dialog */}
-      {showLogoutDialog && (
+      {user && showLogoutDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowLogoutDialog(false)} />
           <div className="relative bg-white rounded-2xl w-full max-w-sm mx-4 p-6">
@@ -219,10 +230,10 @@ function SettingsGroup({ items }: { items: SettingsItem[] }) {
             className="w-full px-4 py-3.5 flex items-center gap-4 text-left hover:bg-slate-50 transition-colors"
           >
             {item.icon}
-            <span className="flex-1 text-sm font-medium text-slate-600">{item.label}</span>
-            {item.trailing && <span>{item.trailing}</span>}
+            <span className="flex-1 min-w-0 text-sm font-medium text-slate-600 wrap-break-word">{item.label}</span>
+            {item.trailing && <span className="shrink-0">{item.trailing}</span>}
             {(item.showChevron !== false && !item.trailing) && (
-              <ChevronRight className="w-5 h-5 text-slate-400" />
+              <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
             )}
           </button>
           {i < items.length - 1 && <hr className="ml-14 border-slate-100" />}

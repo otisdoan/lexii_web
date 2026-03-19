@@ -41,14 +41,14 @@ export default function NotificationList({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
-                <p className={`text-sm ${notification.isRead ? 'text-slate-600' : 'text-slate-900 font-semibold'}`}>
+                <p className={`min-w-0 flex-1 text-sm wrap-break-word ${notification.isRead ? 'text-slate-600' : 'text-slate-900 font-semibold'}`}>
                   {notification.title}
                 </p>
                 <span className="text-xs text-slate-400 shrink-0">
                   {formatNotificationTime(notification.createdAt)}
                 </span>
               </div>
-              <p className={`text-sm mt-1 ${notification.isRead ? 'text-slate-500' : 'text-slate-700'}`}>
+              <p className={`text-sm mt-1 wrap-break-word ${notification.isRead ? 'text-slate-500' : 'text-slate-700'}`}>
                 {notification.body}
               </p>
             </div>
