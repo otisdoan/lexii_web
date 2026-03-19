@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle, XCircle, Volume2, Play, Pause } from 'lucide-react';
-import { getQuestionsByPartId, getQuestionsByTestId } from '@/lib/api';
+import { getQuestionsByPartId, getQuestionsByTestId, getQuestionsByIds } from '@/lib/api';
 import type { QuestionModel } from '@/lib/types';
 
 function AnswerReviewContent() {
@@ -36,15 +36,25 @@ function AnswerReviewContent() {
         let all: QuestionModel[] = testId ? await getQuestionsByTestId(testId) : [];
         all = sortQuestionsOptions(all || []);
 
-        let qs: QuestionModel[] = partId
-          ? await getQuestionsByPartId(partId)
-          : all;
+        let qs: QuestionModel[];
+        if (fromPractice && partId && typeof window !== 'undefined') {
+          const savedIds = sessionStorage.getItem(`practice_question_ids_${partId}`);
+          if (savedIds) {
+            const ids: string[] = JSON.parse(savedIds);
+            const byIds = await getQuestionsByIds(ids);
+            const orderMap = new Map(ids.map((id, i) => [id, i]));
+            qs = byIds.slice().sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+          } else {
+            qs = await getQuestionsByPartId(partId);
+          }
+        } else {
+          qs = partId ? await getQuestionsByPartId(partId) : all;
+        }
         qs = sortQuestionsOptions(qs);
 
         setAllQuestions(all);
         setQuestions(qs);
 
-        // Chỉ dùng practice_answers khi vào từ trang kết quả luyện tập (practice=1)
         if (fromPractice && partId && typeof window !== 'undefined') {
           const practiceStored = sessionStorage.getItem(`practice_answers_${partId}`);
           if (practiceStored) {
@@ -202,13 +212,6 @@ function AnswerReviewContent() {
                   )}
 
                   {audioUrl && <AudioPlayer url={audioUrl} />}
-
-                  {imageUrl && (
-                    <div className="bg-white rounded-xl border border-slate-100 p-4 mt-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={imageUrl} alt="Câu hỏi" className="w-full rounded-xl" />
-                    </div>
-                  )}
 
                   {q.passage && (
                     <div className="bg-slate-50 rounded-lg p-3 mb-3 mt-3">

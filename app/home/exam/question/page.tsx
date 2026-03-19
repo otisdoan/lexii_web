@@ -18,6 +18,8 @@ import {
 import {
   getQuestionsByPartId,
   getQuestionsByTestId,
+  getQuestionsByListeningPartNumber,
+  getQuestionsByReadingPartNumber,
   getTestParts,
   getTestById,
   getCurrentUserRole,
@@ -31,6 +33,10 @@ function ExamQuestionContent() {
   const testTitle = searchParams.get('title') || 'Test';
   const isPractice = searchParams.get('practice') === 'true';
   const partId = searchParams.get('partId') || '';
+  const partNumberParam = searchParams.get('partNumber');
+  const partNumber = partNumberParam ? parseInt(partNumberParam, 10) : null;
+  const questionLimitParam = searchParams.get('questionLimit');
+  const questionLimit = questionLimitParam ? parseInt(questionLimitParam, 10) : null;
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [parts, setParts] = useState<TestPartModel[]>([]);
@@ -46,14 +52,28 @@ function ExamQuestionContent() {
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Load questions (luyện tập 1 part hoặc thi thử toàn đề)
+  // Load questions (luyện tập theo part number từ mọi đề full_test — giống app; hoặc thi thử toàn đề)
   useEffect(() => {
     const loadData = async () => {
       try {
         const allParts = testId ? await getTestParts(testId) : [];
         let loadedQuestions: QuestionModel[] = [];
 
-        if (isPractice && partId) {
+        if (isPractice && partNumber != null && partNumber >= 1 && partNumber <= 7) {
+          // Lấy câu theo part number từ tất cả đề full_test (giống app)
+          if (partNumber <= 4) {
+            loadedQuestions = await getQuestionsByListeningPartNumber(partNumber);
+          } else {
+            loadedQuestions = await getQuestionsByReadingPartNumber(partNumber);
+          }
+          // Shuffle rồi giới hạn số câu, sau đó sắp theo order_index
+          if (loadedQuestions.length > 1) {
+            const shuffled = [...loadedQuestions].sort(() => Math.random() - 0.5);
+            const limit = questionLimit != null && questionLimit > 0 ? questionLimit : shuffled.length;
+            loadedQuestions = shuffled.slice(0, limit).sort((a, b) => a.order_index - b.order_index);
+          }
+          setParts(partId ? [{ id: partId, test_id: testId, part_number: partNumber, instructions: '', question_count: 0 } as TestPartModel] : []);
+        } else if (isPractice && partId) {
           loadedQuestions = await getQuestionsByPartId(partId);
           setParts(allParts.filter((p) => p.id === partId));
         } else if (testId) {
@@ -89,10 +109,10 @@ function ExamQuestionContent() {
       }
     };
 
-    if (testId || (isPractice && partId)) {
+    if (testId || (isPractice && (partId || (partNumber != null && partNumber >= 1 && partNumber <= 7)))) {
       loadData();
     }
-  }, [testId, partId, isPractice]);
+  }, [testId, partId, isPractice, partNumber, questionLimit]);
 
   // Timer
   useEffect(() => {
@@ -219,9 +239,11 @@ function ExamQuestionContent() {
       });
       if (typeof window !== 'undefined') {
         sessionStorage.setItem(`practice_answers_${partId}`, JSON.stringify(userAnswers));
+        sessionStorage.setItem(`practice_question_ids_${partId}`, JSON.stringify(questions.map((q) => q.id)));
       }
+      const section = partNumber != null && partNumber >= 5 ? 'reading' : 'listening';
       router.push(
-        `/home/practice/result?testId=${testId}&partId=${partId}&section=listening&title=${encodeURIComponent(testTitle)}&correct=${correctCount}&total=${questions.length}`
+        `/home/practice/result?testId=${testId}&partId=${partId}&section=${section}&title=${encodeURIComponent(testTitle)}&correct=${correctCount}&total=${questions.length}`
       );
     } else {
       const { listeningScore, readingScore, totalCorrect } = calculateScores();

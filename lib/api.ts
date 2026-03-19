@@ -152,6 +152,53 @@ export async function getQuestionsByPartId(partId: string, limit?: number): Prom
   })) as QuestionModel[];
 }
 
+const sortOptionsById = (opts: unknown[]) =>
+  [...opts].sort((a, b) => String((a as { id?: string }).id ?? '').localeCompare(String((b as { id?: string }).id ?? '')));
+
+/** Lấy câu hỏi theo part number (1–4 Listening, 5–7 Reading) từ tất cả đề full_test — giống app. */
+export async function getQuestionsByListeningPartNumber(partNumber: number): Promise<QuestionModel[]> {
+  const { data: tests, error: testsError } = await supabase
+    .from('tests')
+    .select('id')
+    .eq('type', 'full_test')
+    .order('created_at', { ascending: true });
+  if (testsError) throw testsError;
+  if (!tests?.length) return [];
+
+  const testIds = (tests as { id: string }[]).map((t) => t.id);
+  const { data: parts, error: partsError } = await supabase
+    .from('test_parts')
+    .select('id')
+    .in('test_id', testIds)
+    .eq('part_number', partNumber);
+  if (partsError) throw partsError;
+  if (!parts?.length) return [];
+
+  const partIds = (parts as { id: string }[]).map((p) => p.id);
+  const { data, error } = await supabase
+    .from('questions')
+    .select(`
+      *,
+      question_options(*),
+      question_media(*),
+      passages(*)
+    `)
+    .in('part_id', partIds)
+    .order('order_index');
+  if (error) throw error;
+
+  return (data || []).map((q: Record<string, unknown>) => ({
+    id: q.id as string,
+    part_id: q.part_id as string,
+    passage_id: q.passage_id as string | null,
+    question_text: q.question_text as string | null,
+    order_index: q.order_index as number,
+    options: sortOptionsById((q.question_options || []) as { id: string }[]) as unknown as QuestionModel['options'],
+    media: (q.question_media || []) as unknown as QuestionModel['media'],
+    passage: (q.passages || null) as unknown as QuestionModel['passage'],
+  })) as QuestionModel[];
+}
+
 // ========== Placement Test (for Roadmap) ==========
 // 15 câu rải đều 7 Parts từ một đề full test (vd TEST 1 - ETS 2023):
 // Listening (8): Part 1 (2), Part 2 (2), Part 3 (2), Part 4 (2)
@@ -352,7 +399,7 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
   const { data: tests, error: testsError } = await supabase
     .from('tests')
     .select('id')
-    .or('type.eq.full_test,type.eq.fulltest,type.ilike.full%')
+    .eq('type', 'full_test')
     .order('created_at', { ascending: true });
   if (testsError) throw testsError;
   if (!tests?.length) return [];
@@ -369,9 +416,10 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
   if (partsError) throw partsError;
   if (!parts?.length) return [];
 
+  const partsList = parts as Array<{ id: string; test_id: string; part_number: number }>;
   const partIdsByNumber: Record<number, string[]> = { 1: [], 2: [], 3: [], 4: [] };
   const partNumberByPartId: Record<string, number> = {};
-  for (const p of parts as Array<{ id: string; part_number: number }>) {
+  for (const p of partsList) {
     partIdsByNumber[p.part_number]?.push(p.id);
     partNumberByPartId[p.id] = p.part_number;
   }
@@ -429,10 +477,12 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
 
   return [1, 2, 3, 4].map((partNumber) => {
     const ids = partIdsByNumber[partNumber] || [];
+    const partOfTest = partsList.find((p) => p.test_id === fallbackTestId && p.part_number === partNumber);
+    const partId = partOfTest?.id ?? ids[0] ?? `part-${partNumber}`;
     const total = ids.reduce((sum, id) => sum + (questionCountByPartId[id] || 0), 0);
     const stats = statsByPartNumber[partNumber];
     return {
-      partId: ids[0] || `part-${partNumber}`,
+      partId,
       testId: fallbackTestId,
       partNumber,
       partTitle: `Part ${partNumber}`,
@@ -539,6 +589,7 @@ export async function getWrongReadingQuestionIds(limit = 200): Promise<string[]>
   });
 }
 
+/** Lấy câu hỏi theo part number 5–7 (Reading) từ tất cả đề full_test — giống app. */
 export async function getQuestionsByReadingPartNumber(
   partNumber: number,
   limit?: number,
@@ -546,12 +597,12 @@ export async function getQuestionsByReadingPartNumber(
   const { data: tests, error: testsError } = await supabase
     .from('tests')
     .select('id')
-    .or('type.eq.full_test,type.eq.fulltest,type.ilike.full%')
+    .eq('type', 'full_test')
     .order('created_at', { ascending: true });
   if (testsError) throw testsError;
   if (!tests?.length) return [];
 
-  const testIds = tests.map((t: { id: string }) => t.id);
+  const testIds = (tests as { id: string }[]).map((t) => t.id);
   const { data: parts, error: partsError } = await supabase
     .from('test_parts')
     .select('id')
@@ -560,6 +611,7 @@ export async function getQuestionsByReadingPartNumber(
   if (partsError) throw partsError;
   if (!parts?.length) return [];
 
+  const partIds = (parts as { id: string }[]).map((p) => p.id);
   let query = supabase
     .from('questions')
     .select(`
@@ -568,10 +620,10 @@ export async function getQuestionsByReadingPartNumber(
       question_media(*),
       passages(*)
     `)
-    .in('part_id', parts.map((p: { id: string }) => p.id))
+    .in('part_id', partIds)
     .order('order_index');
 
-  if (limit && limit > 0) query = query.limit(limit);
+  if (limit != null && limit > 0) query = query.limit(limit);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -582,7 +634,7 @@ export async function getQuestionsByReadingPartNumber(
     passage_id: q.passage_id as string | null,
     question_text: q.question_text as string | null,
     order_index: q.order_index as number,
-    options: (q.question_options || []) as unknown as QuestionModel['options'],
+    options: sortOptionsById((q.question_options || []) as { id: string }[]) as unknown as QuestionModel['options'],
     media: (q.question_media || []) as unknown as QuestionModel['media'],
     passage: (q.passages || null) as unknown as QuestionModel['passage'],
   })) as QuestionModel[];
@@ -664,7 +716,7 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
   const { data: tests, error: testsError } = await supabase
     .from('tests')
     .select('id')
-    .or('type.eq.full_test,type.eq.fulltest,type.ilike.full%')
+    .eq('type', 'full_test')
     .order('created_at', { ascending: true });
   if (testsError) throw testsError;
   if (!tests?.length) return [];
@@ -681,9 +733,10 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
   if (partsError) throw partsError;
   if (!parts?.length) return [];
 
+  const partsList = parts as Array<{ id: string; test_id: string; part_number: number }>;
   const partIdsByNumber: Record<number, string[]> = { 5: [], 6: [], 7: [] };
   const partNumberByPartId: Record<string, number> = {};
-  for (const p of parts as Array<{ id: string; part_number: number }>) {
+  for (const p of partsList) {
     partIdsByNumber[p.part_number]?.push(p.id);
     partNumberByPartId[p.id] = p.part_number;
   }
@@ -750,10 +803,12 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
 
   return [5, 6, 7].map((partNumber) => {
     const ids = partIdsByNumber[partNumber] || [];
+    const partOfTest = partsList.find((p) => p.test_id === fallbackTestId && p.part_number === partNumber);
+    const partId = partOfTest?.id ?? ids[0] ?? `part-${partNumber}`;
     const total = ids.reduce((sum, id) => sum + (questionCountByPartId[id] || 0), 0);
     const stats = statsByPartNumber[partNumber];
     return {
-      partId: ids[0] || `part-${partNumber}`,
+      partId,
       testId: fallbackTestId,
       partNumber,
       partTitle: `Part ${partNumber}`,
