@@ -50,7 +50,14 @@ export default function NotificationBell({ notificationsPageHref }: Notification
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-90 max-w-[92vw] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+        <>
+          <button
+            type="button"
+            aria-label="Đóng thông báo"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 bg-black/20 z-40 lg:hidden"
+          />
+          <div className="fixed left-3 right-3 top-16 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 max-h-[72vh] lg:absolute lg:top-auto lg:left-auto lg:right-0 lg:mt-2 lg:w-90 lg:max-w-[92vw] lg:max-h-none">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h4 className="font-semibold text-slate-900">Thông báo</h4>
             <button
@@ -62,7 +69,7 @@ export default function NotificationBell({ notificationsPageHref }: Notification
             </button>
           </div>
 
-          <div className="max-h-110 overflow-y-auto">
+          <div className="max-h-[calc(72vh-108px)] overflow-y-auto lg:max-h-110">
             <NotificationList
               notifications={notifications}
               onClickItem={(notification) => {
@@ -83,7 +90,8 @@ export default function NotificationBell({ notificationsPageHref }: Notification
               Xem thêm
             </Link>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
