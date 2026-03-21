@@ -165,6 +165,47 @@ export interface PracticePart {
   progress: number;
 }
 
+// ========== Roadmap (Learning Path) ==========
+export type TargetScore = 500 | 700 | 900;
+export type SelfAssessedLevel = 'zero' | 'basic' | 'intermediate' | 'unknown';
+export type DurationDays = 30 | 60 | 90 | 180;
+
+export interface RoadmapTemplateModel {
+  id: string;
+  target_score: number;
+  duration_days: number;
+  title: string;
+}
+
+export interface RoadmapTaskModel {
+  id: string;
+  template_id: string;
+  day_number: number;
+  task_type: 'theory' | 'practice' | 'test';
+  reference_id: string | null;
+  title: string;
+}
+
+export interface UserRoadmapModel {
+  id: string;
+  user_id: string;
+  template_id: string;
+  initial_score: number;
+  target_score: number;
+  current_day: number;
+  status: 'active' | 'completed' | 'dropped';
+  start_date: string;
+}
+
+export interface UserTaskProgressModel {
+  id: string;
+  user_roadmap_id: string;
+  task_id: string;
+  status: 'unlocked' | 'in_progress' | 'completed';
+  score_achieved: number | null;
+  completed_at: string | null;
+}
+
 // ========== AI Speaking/Writing ==========
 export interface AiGradeResult {
   overall: number;

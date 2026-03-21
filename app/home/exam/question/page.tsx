@@ -16,16 +16,13 @@ import {
   Lock,
 } from 'lucide-react';
 import {
-  getCurrentUser,
-  getCurrentUserRole,
-  getQuestionsByIds,
-  getQuestionsByReadingPartNumber,
   getQuestionsByPartId,
   getQuestionsByTestId,
-  getTestById,
+  getQuestionsByListeningPartNumber,
+  getQuestionsByReadingPartNumber,
   getTestParts,
-  saveListeningPracticeTracking,
-  submitAttempt,
+  getTestById,
+  getCurrentUserRole,
 } from '@/lib/api';
 import type { QuestionModel, TestPartModel } from '@/lib/types';
 
@@ -34,11 +31,12 @@ function ExamQuestionContent() {
   const router = useRouter();
   const testId = searchParams.get('testId') || '';
   const testTitle = searchParams.get('title') || 'Test';
-  const practiceMode = searchParams.get('practice') === 'true';
+  const isPractice = searchParams.get('practice') === 'true';
   const partId = searchParams.get('partId') || '';
-  const partNumber = parseInt(searchParams.get('partNumber') || '0', 10);
-  const source = searchParams.get('source') || '';
-  const questionLimit = parseInt(searchParams.get('questionLimit') || '0', 10);
+  const partNumberParam = searchParams.get('partNumber');
+  const partNumber = partNumberParam ? parseInt(partNumberParam, 10) : null;
+  const questionLimitParam = searchParams.get('questionLimit');
+  const questionLimit = questionLimitParam ? parseInt(questionLimitParam, 10) : null;
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
   const [parts, setParts] = useState<TestPartModel[]>([]);
@@ -54,65 +52,71 @@ function ExamQuestionContent() {
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Load questions
+  // Load questions (luyện tập theo part number từ mọi đề full_test — giống app; hoặc thi thử toàn đề)
   useEffect(() => {
-    async function load() {
+    const loadData = async () => {
       try {
+        const allParts = testId ? await getTestParts(testId) : [];
         let loadedQuestions: QuestionModel[] = [];
-        if (practiceMode && source === 'wrong') {
-          let wrongIds: string[] = [];
-          if (typeof window !== 'undefined') {
-            const raw = sessionStorage.getItem('practice_wrong_question_ids');
-            if (raw) {
-              try {
-                wrongIds = JSON.parse(raw) as string[];
-              } catch {
-                wrongIds = [];
-              }
-            }
+
+        if (isPractice && partNumber != null && partNumber >= 1 && partNumber <= 7) {
+          // Lấy câu theo part number từ tất cả đề full_test (giống app)
+          if (partNumber <= 4) {
+            loadedQuestions = await getQuestionsByListeningPartNumber(partNumber);
+          } else {
+            loadedQuestions = await getQuestionsByReadingPartNumber(partNumber);
           }
-          loadedQuestions = await getQuestionsByIds(wrongIds);
-        } else if (practiceMode && partNumber >= 5) {
-          loadedQuestions = await getQuestionsByReadingPartNumber(
-            partNumber,
-            questionLimit > 0 ? questionLimit : undefined,
-          );
-        } else if (practiceMode && partId) {
-          loadedQuestions = await getQuestionsByPartId(
-            partId,
-            questionLimit > 0 ? questionLimit : undefined,
-          );
-        } else {
+          // Shuffle rồi giới hạn số câu, sau đó sắp theo order_index
+          if (loadedQuestions.length > 1) {
+            const shuffled = [...loadedQuestions].sort(() => Math.random() - 0.5);
+            const limit = questionLimit != null && questionLimit > 0 ? questionLimit : shuffled.length;
+            loadedQuestions = shuffled.slice(0, limit).sort((a, b) => a.order_index - b.order_index);
+          }
+          setParts(partId ? [{ id: partId, test_id: testId, part_number: partNumber, instructions: '', question_count: 0 } as TestPartModel] : []);
+        } else if (isPractice && partId) {
+          loadedQuestions = await getQuestionsByPartId(partId);
+          setParts(allParts.filter((p) => p.id === partId));
+        } else if (testId) {
           loadedQuestions = await getQuestionsByTestId(testId);
+          setParts(allParts);
         }
 
-        const [ps, test, role] = await Promise.all([
-          getTestParts(testId),
-          getTestById(testId),
-          getCurrentUserRole(),
-        ]);
-
-        const premiumUser = role === 'premium' || role === 'admin';
-        const blockedByTest = Boolean(test?.is_premium) && !premiumUser;
-        if (blockedByTest) {
-          setHasAccess(false);
-          return;
-        }
+        loadedQuestions = loadedQuestions.map((q) => ({
+          ...q,
+          options: [...(q.options || [])].sort((a, b) =>
+            String(a.id).localeCompare(String(b.id))
+          ),
+        }));
 
         setQuestions(loadedQuestions);
-        setParts(ps);
-      } catch {
-        //
+
+        if (testId) {
+          const [test, role] = await Promise.all([
+            getTestById(testId),
+            getCurrentUserRole(),
+          ]);
+          const premiumUser = role === 'premium' || role === 'admin';
+          const blockedByTest = Boolean(test?.is_premium) && !premiumUser;
+          if (blockedByTest) {
+            setHasAccess(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Lỗi khi tải dữ liệu đề thi:', error);
       } finally {
         setLoading(false);
       }
+    };
+
+    if (testId || (isPractice && (partId || (partNumber != null && partNumber >= 1 && partNumber <= 7)))) {
+      loadData();
     }
-    if (testId) load();
-  }, [partId, partNumber, practiceMode, questionLimit, source, testId]);
+  }, [testId, partId, isPractice, partNumber, questionLimit]);
 
   // Timer
   useEffect(() => {
-    if (practiceMode) return;
+    if (isPractice) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 0) {
@@ -125,7 +129,7 @@ function ExamQuestionContent() {
     }, 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practiceMode]);
+  }, [isPractice]);
 
   // Audio progress
   useEffect(() => {
@@ -223,89 +227,40 @@ function ExamQuestionContent() {
     return { listeningScore, readingScore, totalCorrect: listeningCorrect + readingCorrect };
   }, [questions, parts, userAnswers]);
 
-  const handleSubmit = useCallback(async () => {
-    if (practiceMode) {
-      let correct = 0;
-      const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
-      questions.forEach((q, i) => {
-        const selectedIdx = userAnswers[i];
-        if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
-        const selected = q.options[selectedIdx];
-        if (selected?.is_correct) correct += 1;
-        answerRows.push({
-          question_id: q.id,
-          option_id: selected.id,
-          is_correct: Boolean(selected.is_correct),
-        });
-      });
-
-      const user = await getCurrentUser();
-      if (user && answerRows.length > 0) {
-        try {
-          await submitAttempt(user.id, testId, correct, answerRows);
-          await saveListeningPracticeTracking(questions, userAnswers);
-        } catch {
-          // keep UX smooth even when saving fails
+  const handleSubmit = useCallback(() => {
+    if (isPractice && partId) {
+      let correctCount = 0;
+      questions.forEach((q, index) => {
+        const userSelectedOptionIndex = userAnswers[index];
+        if (userSelectedOptionIndex !== undefined) {
+          const selectedOption = q.options[userSelectedOptionIndex];
+          if (selectedOption?.is_correct) correctCount++;
         }
+      });
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`practice_answers_${partId}`, JSON.stringify(userAnswers));
+        sessionStorage.setItem(`practice_question_ids_${partId}`, JSON.stringify(questions.map((q) => q.id)));
       }
-
+      const section = partNumber != null && partNumber >= 5 ? 'reading' : 'listening';
+      router.push(
+        `/home/practice/result?testId=${testId}&partId=${partId}&section=${section}&title=${encodeURIComponent(testTitle)}&correct=${correctCount}&total=${questions.length}`
+      );
+    } else {
+      const { listeningScore, readingScore, totalCorrect } = calculateScores();
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`exam_answers_${testId}`, JSON.stringify(userAnswers));
+      }
       const params = new URLSearchParams({
         testId,
         title: testTitle,
-        correct: String(correct),
-        total: String(questions.length),
-        section: partNumber >= 5 ? 'reading' : 'listening',
-        practice: 'true',
-        source,
+        listeningScore: String(listeningScore),
+        readingScore: String(readingScore),
+        totalCorrect: String(totalCorrect),
+        totalQuestions: String(questions.length),
       });
-      if (partId) params.set('partId', partId);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
-        sessionStorage.setItem(
-          'practice_question_ids',
-          JSON.stringify(questions.map((q) => q.id)),
-        );
-      }
-      router.push(`/home/practice/result?${params.toString()}`);
-      return;
+      router.push(`/home/exam/score?${params.toString()}`);
     }
-
-    const { listeningScore, readingScore, totalCorrect } = calculateScores();
-    const answerRows: { question_id: string; option_id: string; is_correct: boolean }[] = [];
-    questions.forEach((q, i) => {
-      const selectedIdx = userAnswers[i];
-      if (selectedIdx === undefined || selectedIdx < 0 || selectedIdx >= q.options.length) return;
-      const selected = q.options[selectedIdx];
-      answerRows.push({
-        question_id: q.id,
-        option_id: selected.id,
-        is_correct: Boolean(selected.is_correct),
-      });
-    });
-
-    const user = await getCurrentUser();
-    if (user && answerRows.length > 0) {
-      try {
-        await submitAttempt(user.id, testId, listeningScore + readingScore, answerRows);
-      } catch {
-        // Keep UX smooth even if persistence fails.
-      }
-    }
-
-    const params = new URLSearchParams({
-      testId,
-      title: testTitle,
-      listeningScore: String(listeningScore),
-      readingScore: String(readingScore),
-      totalCorrect: String(totalCorrect),
-      totalQuestions: String(questions.length),
-    });
-    // Store answers in sessionStorage for the result page
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('exam_answers', JSON.stringify(userAnswers));
-    }
-    router.push(`/home/exam/score?${params.toString()}`);
-  }, [calculateScores, partId, partNumber, practiceMode, questions, router, source, testId, testTitle, userAnswers]);
+  }, [isPractice, partId, testId, testTitle, questions, userAnswers, calculateScores, router]);
 
   if (loading) {
     return (
@@ -380,7 +335,7 @@ function ExamQuestionContent() {
               timeLeft < 300 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-700'
             }`}>
               <Clock className="w-4 h-4" />
-              {practiceMode ? 'Practice' : formatTime(timeLeft)}
+              {isPractice ? 'Practice' : formatTime(timeLeft)}
             </div>
 
             {/* Overview */}

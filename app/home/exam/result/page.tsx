@@ -26,8 +26,8 @@ function ResultContent() {
         ]);
         setQuestions(qs);
         setParts(ps);
-        // Load answers from sessionStorage
-        const stored = sessionStorage.getItem('exam_answers');
+        // Load answers by testId để đúng với đề vừa thi
+        const stored = sessionStorage.getItem(`exam_answers_${testId}`);
         if (stored) setUserAnswers(JSON.parse(stored));
       } catch {
         //

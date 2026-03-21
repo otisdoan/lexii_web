@@ -8,6 +8,7 @@ import Link from 'next/link';
 interface Stats {
   users: number;
   tests: number;
+  
   questions: number;
   vocabulary: number;
   attempts: number;

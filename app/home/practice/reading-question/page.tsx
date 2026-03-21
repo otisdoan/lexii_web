@@ -10,6 +10,7 @@ function ReadingQuestionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const partId = searchParams.get('partId') || '';
+  const testId = searchParams.get('testId') || '';
   const partTitle = searchParams.get('title') || 'Reading';
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
@@ -61,12 +62,18 @@ function ReadingQuestionContent() {
         correct++;
       }
     });
-    // Navigate to result
+    // Lưu đáp án theo partId để trang xem đáp án hiển thị đúng (chế độ luyện tập)
+    if (typeof window !== 'undefined' && partId) {
+      sessionStorage.setItem(`practice_answers_${partId}`, JSON.stringify(userAnswers));
+    }
     const params = new URLSearchParams({
       title: partTitle,
       correct: String(correct),
       total: String(questions.length),
+      section: 'reading',
     });
+    if (testId) params.set('testId', testId);
+    if (partId) params.set('partId', partId);
     router.push(`/home/practice/result?${params.toString()}`);
   };
 

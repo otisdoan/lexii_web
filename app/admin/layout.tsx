@@ -16,7 +16,9 @@ import {
   ChevronRight,
   BellRing,
   Menu,
-  X,
+  X,   
+
+  
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
