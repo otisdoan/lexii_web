@@ -131,8 +131,42 @@ export interface WritingPromptModel {
   passage_text: string;
   passage_subject: string;
   model_answer: string;
-  hint_words: string[];
+  hint_words: string[] | string;
   order_index: number;
+}
+
+// ========== Speaking ==========
+export interface SpeakingPromptModel {
+  id: string;
+  part_number: number;
+  task_type: string;
+  title: string;
+  passage?: string | null;
+  prompt: string;
+  image_url?: string | null;
+  prep_seconds: number;
+  model_answer?: string | null;
+  hint_words?: string[] | string;
+  order_index: number;
+}
+
+// ========== Practice History ==========
+export interface PracticeHistoryItem {
+  id: string;
+  user_id: string;
+  mode: 'speaking' | 'writing';
+  part_number: number;
+  prompt_id: string;
+  prompt_title: string;
+  prompt_content: string;
+  user_answer: string;
+  ai_score: number | null;
+  ai_feedback: string | null;
+  ai_errors: string[] | null;
+  ai_task_scores: Record<string, number> | null;
+  ai_important_words: string[] | null;
+  ai_suggested_answer: string | null;
+  created_at: string;
 }
 
 // ========== Practice ==========

@@ -38,7 +38,14 @@ function LoginContent() {
       }
       router.push('/home');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Email hoặc mật khẩu không đúng');
+      const errorMessage = err instanceof Error ? err.message : 'Email hoặc mật khẩu không đúng';
+      // Check if email is not confirmed
+      if (errorMessage.toLowerCase().includes('email not confirmed') ||
+          errorMessage.toLowerCase().includes('chưa được xác nhận')) {
+        setError('Email chưa được xác nhận. Vui lòng kiểm tra hộp thư và bấm link xác nhận.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

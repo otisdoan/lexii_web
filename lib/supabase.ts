@@ -5,7 +5,16 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOi
 
 // createBrowserClient from @supabase/ssr stores the PKCE code verifier in cookies
 // instead of localStorage, which works reliably across Next.js page navigations.
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    headers: {
+      'Cache-Control': 'no-cache',
+    },
+  },
+});
+
+// Session synchronization is handled by @supabase/ssr's createBrowserClient
+// via cookies (PKCE code verifier). No module-level side effects needed.
 
 export const STORAGE = {
   audio: 'audio',

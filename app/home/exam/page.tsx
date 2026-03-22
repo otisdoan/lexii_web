@@ -17,12 +17,23 @@ import {
 import { getAllTests, getCurrentUserRole } from '@/lib/api';
 import type { TestModel } from '@/lib/types';
 
+const FULLTEST_YEARS = ['2018', '2019', '2020', '2022', '2023', '2024', '2026'] as const;
+
+function extractYear(title: string): string | null {
+  const match = title.match(/\b(201[89]|202[0-46])\b/);
+  return match ? match[1] : null;
+}
+
 export default function ExamPage() {
   const [tests, setTests] = useState<TestModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'full' | 'mini'>('all');
   const [search, setSearch] = useState('');
   const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [fulltestYear, setFulltestYear] = useState<string>('all');
+  const [openedTestIds, setOpenedTestIds] = useState<Set<string>>(new Set());
+  const [fulltestPage, setFulltestPage] = useState(1);
+  const FULLTEST_PAGE_SIZE = 10;
 
   useEffect(() => {
     async function load() {
@@ -32,6 +43,19 @@ export default function ExamPage() {
           getCurrentUserRole(),
         ]);
         setTests(data);
+
+        const { supabase } = await import('@/lib/supabase');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: attempts } = await supabase
+            .from('attempts')
+            .select('test_id')
+            .eq('user_id', user.id);
+          if (attempts) {
+            setOpenedTestIds(new Set(attempts.map((a: { test_id: string }) => a.test_id)));
+          }
+        }
+
         setIsPremiumUser(role === 'premium' || role === 'admin');
       } catch {
         // handle error
@@ -52,8 +76,20 @@ export default function ExamPage() {
     return true;
   });
 
-  const fullTests = filteredTests.filter(t => isFullTest(t.type));
   const miniTests = filteredTests.filter(t => isMiniTest(t.type));
+
+  const fullTests = (() => {
+    const base = filteredTests.filter(t => isFullTest(t.type));
+    const byYear = fulltestYear === 'all'
+      ? base
+      : base.filter(t => extractYear(t.title) === fulltestYear);
+    return byYear.sort((a, b) => {
+      const aOpened = openedTestIds.has(a.id) ? 1 : 0;
+      const bOpened = openedTestIds.has(b.id) ? 1 : 0;
+      if (aOpened !== bOpened) return bOpened - aOpened;
+      return a.title.localeCompare(b.title);
+    });
+  })();
 
   return (
     <div className="space-y-8 pb-20 lg:pb-8">
@@ -105,14 +141,91 @@ export default function ExamPage() {
       ) : (
         <>
           {/* Full Tests */}
-          {(filter === 'all' || filter === 'full') && fullTests.length > 0 && (
+          {(filter === 'all' || filter === 'full') && (
             <section>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Full Test ({fullTests.length})</h3>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {fullTests.map(test => (
-                  <TestCard key={test.id} test={test} isPremiumUser={isPremiumUser} />
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Full Test ({fullTests.length})</h3>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-4 h-4 text-primary" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <select
+                    value={fulltestYear}
+                    onChange={e => {
+                      setFulltestYear(e.target.value);
+                      setFulltestPage(1);
+                    }}
+                    className="appearance-none pl-9 pr-9 py-2 bg-linear-to-r from-primary/5 to-blue-50 border-2 border-primary/30 rounded-xl text-sm font-semibold text-primary focus:outline-none focus:border-primary focus:ring-3 focus:ring-primary/20 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    <option value="all">Tất cả</option>
+                    {FULLTEST_YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
+                    <svg className="w-4 h-4 text-primary" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
               </div>
+              {fullTests.length > 0 ? (
+                <>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {fullTests
+                      .slice((fulltestPage - 1) * FULLTEST_PAGE_SIZE, fulltestPage * FULLTEST_PAGE_SIZE)
+                      .map(test => (
+                        <TestCard key={test.id} test={test} isPremiumUser={isPremiumUser} isOpened={openedTestIds.has(test.id)} />
+                      ))}
+                  </div>
+                  {fullTests.length > FULLTEST_PAGE_SIZE && (
+                    <div className="flex items-center justify-center gap-1.5 mt-6">
+                      <button
+                        disabled={fulltestPage === 1}
+                        onClick={() => setFulltestPage(p => p - 1)}
+                        className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-sm font-semibold text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 hover:border-blue-300 hover:text-primary transition"
+                      >
+                        ‹
+                      </button>
+                      {Array.from({ length: Math.ceil(fullTests.length / FULLTEST_PAGE_SIZE) }, (_, i) => i + 1)
+                        .filter(p => {
+                          const total = Math.ceil(fullTests.length / FULLTEST_PAGE_SIZE);
+                          return p === 1 || p === total || Math.abs(p - fulltestPage) <= 1;
+                        })
+                        .map((p, idx, arr) => (
+                          <span key={p} className="flex items-center">
+                            {idx > 0 && arr[idx - 1] !== p - 1 && (
+                              <span className="px-1 text-slate-400 text-sm">…</span>
+                            )}
+                            <button
+                              onClick={() => setFulltestPage(p)}
+                              className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${
+                                fulltestPage === p
+                                  ? 'bg-primary text-white shadow-sm'
+                                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-primary'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          </span>
+                        ))}
+                      <button
+                        disabled={fulltestPage >= Math.ceil(fullTests.length / FULLTEST_PAGE_SIZE)}
+                        onClick={() => setFulltestPage(p => p + 1)}
+                        className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-sm font-semibold text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 hover:border-blue-300 hover:text-primary transition"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-10 bg-white rounded-2xl border border-slate-100">
+                  <p className="text-slate-400 text-sm">Không có đề nào{fulltestYear !== 'all' ? ` cho năm ${fulltestYear}` : ''}</p>
+                </div>
+              )}
             </section>
           )}
 
@@ -182,10 +295,12 @@ function TestCard({
   test,
   variant = 'full',
   isPremiumUser,
+  isOpened,
 }: {
   test: TestModel;
   variant?: 'full' | 'mini';
   isPremiumUser: boolean;
+  isOpened?: boolean;
 }) {
   const isMini = variant === 'mini';
   const isLocked = test.is_premium && !isPremiumUser;
@@ -202,9 +317,14 @@ function TestCard({
         <div className={`w-11 h-11 ${isMini ? 'bg-indigo-50' : 'bg-teal-50'} rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform`}>
           {isMini ? <Star className="w-5 h-5 text-indigo-600" /> : <FileText className="w-5 h-5 text-primary" />}
         </div>
-        {test.is_premium && !isPremiumUser && (
-          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">Premium</span>
-        )}
+        <div className="flex gap-1.5">
+          {isOpened && !isMini && (
+            <span className="px-2 py-0.5 bg-teal-50 text-teal-600 text-xs font-semibold rounded-full">Đã làm</span>
+          )}
+          {test.is_premium && !isPremiumUser && (
+            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">Premium</span>
+          )}
+        </div>
       </div>
       <h4 className="font-semibold text-slate-800 text-sm mb-2 line-clamp-2">{test.title}</h4>
       <div className="flex items-center gap-3 text-xs text-slate-500">

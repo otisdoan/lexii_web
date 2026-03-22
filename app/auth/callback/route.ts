@@ -28,9 +28,13 @@ export async function GET(request: Request) {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Handle cookie setting errors
+        }
       },
     },
   });
@@ -42,5 +46,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login?error=${msg}`);
   }
 
-  return NextResponse.redirect(`${origin}/home`);
+  // Redirect to confirm page to sync session properly on client
+  return NextResponse.redirect(`${origin}/auth/confirm`);
 }

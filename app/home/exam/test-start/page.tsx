@@ -3,7 +3,8 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { ArrowLeft, Clock, HelpCircle, BookOpen, Headphones, AlertCircle, Lock } from 'lucide-react';
-import { getCurrentUserRole, getTestById } from '@/lib/api';
+import { getCurrentUser, getCurrentUserRole, getTestById } from '@/lib/api';
+import LoginRequiredModal from '@/app/components/LoginRequiredModal';
 
 function TestStartContent() {
   const searchParams = useSearchParams();
@@ -16,10 +17,20 @@ function TestStartContent() {
   const isPremiumParam = searchParams.get('isPremium') === '1';
   const [isLocked, setIsLocked] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     async function checkAccess() {
       try {
+        const user = await getCurrentUser();
+        if (!user) {
+          setIsLoggedIn(false);
+          setCheckingAccess(false);
+          return;
+        }
+        setIsLoggedIn(true);
+
         const [test, role] = await Promise.all([
           testId ? getTestById(testId) : Promise.resolve(null),
           getCurrentUserRole(),
@@ -38,6 +49,10 @@ function TestStartContent() {
   }, [isPremiumParam, testId]);
 
   const handleStart = () => {
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
     if (isLocked) {
       router.push('/home/upgrade');
       return;
@@ -60,9 +75,9 @@ function TestStartContent() {
 
       <div className="max-w-lg mx-auto">
         {/* Card */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mt-12">
           {/* Wave header */}
-          <div className="bg-gradient-to-br from-primary to-teal-500 px-8 py-10 text-white relative">
+          <div className="bg-linear-to-br from-primary to-teal-500 px-8 py-10 text-white relative">
             <div className="absolute bottom-0 left-0 right-0">
               <svg viewBox="0 0 400 30" className="w-full" preserveAspectRatio="none">
                 <path d="M0,30 C100,0 300,0 400,30 L400,30 L0,30 Z" fill="white" />
@@ -145,6 +160,13 @@ function TestStartContent() {
           </div>
         </div>
       </div>
+
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Yêu cầu đăng nhập"
+        description="Bạn cần đăng nhập để làm bài thi. Đăng nhập ngay để bắt đầu!"
+      />
     </div>
   );
 }

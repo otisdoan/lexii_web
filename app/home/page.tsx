@@ -17,9 +17,22 @@ import {
   FileText,
   HelpCircle,
   Lock,
+  CheckCircle,
+  ThumbsUp,
+  ThumbsDown,
+  Mic2,
+  PenLine,
 } from 'lucide-react';
-import { getCurrentUserRole, getFullTests, getMiniTests } from '@/lib/api';
-import type { TestModel } from '@/lib/types';
+import {
+  getCurrentUserRole,
+  getFullTests,
+  getMiniTests,
+  getUserAttemptHistory,
+  getRecentPracticeHistory,
+  getVocabularyCount,
+  getGrammarCount,
+} from '@/lib/api';
+import type { TestModel, AttemptHistoryItem, PracticeHistoryItem } from '@/lib/types';
 
 const skills = [
   {
@@ -60,19 +73,59 @@ const skills = [
   },
 ];
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Vừa xong';
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function getScoreColor(score: number): string {
+  if (score >= 85) return 'text-green-600';
+  if (score >= 65) return 'text-amber-600';
+  return 'text-red-500';
+}
+
+function getScoreLabel(score: number): string {
+  if (score >= 85) return 'Tốt';
+  if (score >= 65) return 'Khá';
+  return 'Cần cải thiện';
+}
+
 export default function HomePage() {
   const [fullTests, setFullTests] = useState<TestModel[]>([]);
   const [miniTests, setMiniTests] = useState<TestModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
 
+  const [examHistory, setExamHistory] = useState<AttemptHistoryItem[]>([]);
+  const [practiceHistory, setPracticeHistory] = useState<PracticeHistoryItem[]>([]);
+  const [vocabCount, setVocabCount] = useState(0);
+  const [grammarCount, setGrammarCount] = useState(0);
+
   useEffect(() => {
     async function load() {
       try {
-        const [ft, mt, role] = await Promise.all([getFullTests(), getMiniTests(), getCurrentUserRole()]);
+        const [ft, mt, role, vocab, grammar] = await Promise.all([
+          getFullTests(),
+          getMiniTests(),
+          getCurrentUserRole(),
+          getVocabularyCount(),
+          getGrammarCount(),
+        ]);
         setFullTests(ft);
         setMiniTests(mt);
         setIsPremiumUser(role === 'premium' || role === 'admin');
+        setVocabCount(vocab);
+        setGrammarCount(grammar);
       } catch {
         // Silently handle - will show empty state
       } finally {
@@ -81,6 +134,24 @@ export default function HomePage() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const [exams, practices] = await Promise.all([
+          getUserAttemptHistory(5),
+          getRecentPracticeHistory(5),
+        ]);
+        setExamHistory(exams);
+        setPracticeHistory(practices);
+      } catch {
+        // silently handle
+      }
+    }
+    loadHistory();
+  }, []);
+
+  const hasAnyHistory = examHistory.length > 0 || practiceHistory.length > 0;
 
   return (
     <div className="space-y-8 pb-20 lg:pb-8">
@@ -179,7 +250,7 @@ export default function HomePage() {
               </div>
             )}
           </div>
-        </section>  
+        </section>
 
         {/* Mini Tests */}
         <section>
@@ -234,12 +305,91 @@ export default function HomePage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-slate-800">Lịch sử làm bài</h3>
+            <Link href="/home/settings/test-history" className="text-primary text-sm font-medium flex items-center gap-1 hover:underline">
+              Xem tất cả <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
-            <TrendingUp className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500 mb-1">Chưa có lịch sử</p>
-            <p className="text-xs text-slate-400">Hoàn thành bài thi đầu tiên để xem kết quả</p>
-          </div>
+
+          {!hasAnyHistory ? (
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+              <TrendingUp className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500 mb-1">Chưa có lịch sử</p>
+              <p className="text-xs text-slate-400">Hoàn thành bài thi đầu tiên để xem kết quả</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+              {/* Practice History Items */}
+              {practiceHistory.length > 0 && (
+                <div className="divide-y divide-slate-50">
+                  {practiceHistory.map(item => (
+                    <Link
+                      key={item.id}
+                      href={item.mode === 'speaking' ? '/home/practice/speaking' : '/home/practice/writing'}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        item.mode === 'speaking' ? 'bg-orange-50' : 'bg-purple-50'
+                      }`}>
+                        {item.mode === 'speaking'
+                          ? <Mic2 className={`w-4 h-4 ${item.mode === 'speaking' ? 'text-orange-500' : ''}`} />
+                          : <PenLine className={`w-4 h-4 ${item.mode === 'writing' ? 'text-purple-500' : ''}`} />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{item.prompt_title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {item.mode === 'speaking' ? 'Luyện nói' : 'Luyện viết'} · Part {item.part_number}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {item.ai_score !== null ? (
+                          <div>
+                            <p className={`text-sm font-bold ${getScoreColor(item.ai_score)}`}>
+                              {item.ai_score}/5
+                            </p>
+                            <p className="text-xs text-slate-400">{formatDate(item.created_at)}</p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">{formatDate(item.created_at)}</p>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {/* Exam History Items */}
+              {examHistory.length > 0 && (
+                <div className="divide-y divide-slate-50">
+                  {examHistory.map(item => (
+                    <Link
+                      key={item.id}
+                      href={`/home/settings/test-history`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="w-9 h-9 bg-teal-50 rounded-lg flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{item.testTitle}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Đề thi · {item.answeredCount} câu
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div>
+                          <p className={`text-sm font-bold ${getScoreColor(item.score)}`}>
+                            {item.score} điểm
+                          </p>
+                          <p className="text-xs text-slate-400">{formatDate(item.submittedAt)}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Notebook */}
@@ -248,16 +398,22 @@ export default function HomePage() {
             <h3 className="text-lg font-bold text-slate-800">Sổ tay</h3>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer">
+            <Link
+              href="/home/vocabulary"
+              className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
+            >
               <BookMarked className="w-8 h-8 text-primary mb-2" />
               <h4 className="font-semibold text-slate-800 text-sm">Từ vựng</h4>
-              <p className="text-xs text-slate-500 mt-1">0 từ đã lưu</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer">
+              <p className="text-xs text-slate-500 mt-1">{vocabCount > 0 ? `${vocabCount} từ đã lưu` : 'Chưa có từ vựng'}</p>
+            </Link>
+            <Link
+              href="/home/grammar"
+              className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
+            >
               <HelpCircle className="w-8 h-8 text-orange-500 mb-2" />
-              <h4 className="font-semibold text-slate-800 text-sm">Câu hỏi</h4>
-              <p className="text-xs text-slate-500 mt-1">0 câu đã lưu</p>
-            </div>
+              <h4 className="font-semibold text-slate-800 text-sm">Ngữ pháp</h4>
+              <p className="text-xs text-slate-500 mt-1">{grammarCount > 0 ? `${grammarCount} câu hỏi` : 'Chưa có ngữ pháp'}</p>
+            </Link>
           </div>
         </section>
       </div>

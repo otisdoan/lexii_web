@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, CheckCircle } from 'lucide-react';
 import { signUp, signInWithGoogle } from '@/lib/api';
 
 export default function SignUpPage() {
@@ -17,6 +17,7 @@ export default function SignUpPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +33,21 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       await signUp(email, password, fullName);
-      router.push('/home');
+      setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Đã có lỗi xảy ra');
+      const errorMsg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra';
+
+      // Handle rate limit error
+      if (errorMsg.toLowerCase().includes('rate limit') ||
+          errorMsg.toLowerCase().includes('quá nhanh') ||
+          errorMsg.toLowerCase().includes('too many requests')) {
+        setError('Bạn đã đăng ký quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.');
+      } else if (errorMsg.toLowerCase().includes('already registered') ||
+                 errorMsg.toLowerCase().includes('already exists')) {
+        setError('Email này đã được đăng ký. Vui lòng đăng nhập hoặc sử dụng email khác.');
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -51,18 +64,83 @@ export default function SignUpPage() {
     }
   };
 
+  // Success state
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-teal-50 via-white to-slate-50">
+        <div className="w-full max-w-md mx-auto px-6 py-12">
+          <div className="text-center">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 shadow-md border border-slate-200">
+              <Image src="/lexii.jpg" alt="Lexii logo" width={64} height={64} className="w-full h-full object-cover" priority />
+            </div>
+
+            {/* Success icon */}
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-green-500" />
+            </div>
+
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Đăng ký thành công!</h1>
+            <p className="text-slate-500 text-sm mb-6">
+              Chúng tôi đã gửi email xác nhận đến <span className="font-semibold text-slate-700">{email}</span>
+            </p>
+
+            {/* Instructions */}
+            <div className="bg-teal-50 rounded-2xl p-5 mb-6 text-left">
+              <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-teal-600" />
+                Hướng dẫn
+              </h3>
+              <ol className="text-sm text-slate-600 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+                  <span>Kiểm tra hộp thư <span className="font-medium">{email}</span></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+                  <span>Bấm vào link <span className="font-medium">&quot;Confirm signup&quot;</span> trong email</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+                  <span> Quay lại trang này và <span className="font-medium">Đăng nhập</span></span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Resend email button */}
+            <p className="text-sm text-slate-500 mb-4">
+              Không nhận được email?
+              <button
+                onClick={async () => {
+                  try {
+                    await signUp(email, password, fullName);
+                  } catch {
+                    //
+                  }
+                }}
+                className="text-primary font-semibold ml-1 hover:underline"
+              >
+                Gửi lại
+              </button>
+            </p>
+
+            {/* Back to login */}
+            <button
+              onClick={() => router.push('/auth/login')}
+              className="inline-flex items-center gap-2 text-primary font-semibold hover:underline"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Quay về đăng nhập
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-teal-50 via-white to-slate-50">
       <div className="w-full max-w-md mx-auto px-6 py-12">
-        {/* Back */}
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-8 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Quay lại</span>
-        </button>
-
+  
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 shadow-md border border-slate-200">

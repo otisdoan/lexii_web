@@ -32,7 +32,7 @@ function ScoreContent() {
         {/* Certificate Card */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-lg overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-br from-primary to-teal-500 px-8 pt-8 pb-12 text-center text-white relative">
+          <div className="bg-gradient-to-br from-primary to-teal-500 px-8 pt-8 pb-4 text-center text-white relative">
             <div className="absolute top-4 right-4">
               <button className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
                 <Share2 className="w-5 h-5" />

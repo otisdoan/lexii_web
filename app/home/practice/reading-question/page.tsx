@@ -2,9 +2,10 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, X, Lock } from 'lucide-react';
-import { getCurrentUserRole, getQuestionsByPartId, getTestPartById } from '@/lib/api';
+import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { getCurrentUser, getQuestionsByPartId } from '@/lib/api';
 import type { QuestionModel } from '@/lib/types';
+import LoginRequiredModal from '@/app/components/LoginRequiredModal';
 
 function ReadingQuestionContent() {
   const searchParams = useSearchParams();
@@ -16,25 +17,19 @@ function ReadingQuestionContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
-  const [hasAccess, setHasAccess] = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const limit = parseInt(searchParams.get('limit') || '0') || undefined;
-        const [role, part] = await Promise.all([
-          getCurrentUserRole(),
-          getTestPartById(partId),
-        ]);
-        const premiumUser = role === 'premium' || role === 'admin';
-        const locked = Boolean(part && part.part_number >= 6 && !premiumUser);
-        if (locked) {
-          setHasAccess(false);
+        const user = await getCurrentUser();
+        if (!user) {
+          setShowLoginModal(true);
           return;
         }
 
-        const qs = await getQuestionsByPartId(partId, limit);
+        const qs = await getQuestionsByPartId(partId);
         setQuestions(qs);
       } catch {
         //
@@ -43,7 +38,7 @@ function ReadingQuestionContent() {
       }
     }
     if (partId) load();
-  }, [partId, searchParams]);
+  }, [partId]);
 
   const currentQuestion = questions[currentIndex];
   const labels = ['A', 'B', 'C', 'D'];
@@ -74,24 +69,6 @@ function ReadingQuestionContent() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  if (!hasAccess) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="bg-white border border-amber-200 rounded-2xl p-6 text-center max-w-md mx-4">
-          <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
-          <h3 className="font-bold text-slate-800 mb-1">Part Premium</h3>
-          <p className="text-sm text-slate-500 mb-4">Tài khoản hiện tại cần nâng cấp để học part này.</p>
-          <button
-            onClick={() => router.push('/home/upgrade')}
-            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
-          >
-            Nâng cấp Premium
-          </button>
-        </div>
       </div>
     );
   }
@@ -232,6 +209,13 @@ function ReadingQuestionContent() {
           </div>
         </div>
       )}
+
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Yêu cầu đăng nhập"
+        description="Bạn cần đăng nhập để luyện tập phần này. Đăng nhập ngay để bắt đầu!"
+      />
     </div>
   );
 }

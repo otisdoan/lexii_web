@@ -6,6 +6,8 @@ import type {
   VocabularyModel,
   GrammarModel,
   WritingPromptModel,
+  SpeakingPromptModel,
+  PracticeHistoryItem,
   PracticePartData,
   AiGradeResult,
   AttemptHistoryItem,
@@ -136,8 +138,8 @@ export async function getQuestionsByTestId(testId: string): Promise<QuestionMode
   })) as QuestionModel[];
 }
 
-export async function getQuestionsByPartId(partId: string, limit?: number): Promise<QuestionModel[]> {
-  let query = supabase
+export async function getQuestionsByPartId(partId: string): Promise<QuestionModel[]> {
+  const { data, error } = await supabase
     .from('questions')
     .select(`
       *,
@@ -148,12 +150,92 @@ export async function getQuestionsByPartId(partId: string, limit?: number): Prom
     .eq('part_id', partId)
     .order('order_index');
 
-  if (limit) query = query.limit(limit);
-
-  const { data, error } = await query;
   if (error) throw error;
 
   return (data || []).map((q: Record<string, unknown>) => ({
+    id: q.id as string,
+    part_id: q.part_id as string,
+    passage_id: q.passage_id as string | null,
+    question_text: q.question_text as string | null,
+    order_index: q.order_index as number,
+    options: (q.question_options || []) as unknown as QuestionModel['options'],
+    media: (q.question_media || []) as unknown as QuestionModel['media'],
+    passage: (q.passages || null) as unknown as QuestionModel['passage'],
+  })) as QuestionModel[];
+}
+
+export async function getQuestionsByListeningPartNumber(
+  partNumber: number,
+): Promise<QuestionModel[]> {
+  const { data: tests, error: testsError } = await supabase
+    .from('tests')
+    .select('id')
+    .or('type.eq.full_test,type.eq.fulltest,type.ilike.full%')
+    .order('created_at', { ascending: true });
+  if (testsError) throw testsError;
+  if (!tests?.length) return [];
+
+  const testIds = tests.map((t: { id: string }) => t.id);
+  const { data: parts, error: partsError } = await supabase
+    .from('test_parts')
+    .select('id,part_number,test_id')
+    .in('test_id', testIds)
+    .eq('part_number', partNumber);
+  if (partsError) throw partsError;
+  if (!parts?.length) return [];
+
+  const partIds = (parts as Array<{ id: string; test_id: string }>).map(p => p.id);
+  const partTestIdMap: Record<string, string> = {};
+  for (const p of parts as Array<{ id: string; test_id: string }>) {
+    partTestIdMap[p.id] = p.test_id;
+  }
+
+  const { data, error } = await supabase
+    .from('questions')
+    .select(`
+      *,
+      question_options(*),
+      question_media(*),
+      passages(*)
+    `)
+    .in('part_id', partIds)
+    .order('order_index');
+
+  if (error) throw error;
+
+  // Map test_id vào question
+  const withTestId = (data || []).map((q: Record<string, unknown>) => ({
+    ...q,
+    test_id: partTestIdMap[q.part_id as string],
+  }));
+
+  // Sort: theo test order, rồi group audio trong mỗi test
+  // Nhóm cùng audio lại, giữ thứ tự test
+  const testOrder: Record<string, number> = {};
+  testIds.forEach((id, idx) => { testOrder[id] = idx; });
+
+  const sorted = [...withTestId].sort((a, b) => {
+    const aOrd = testOrder[(a as Record<string, unknown>)['test_id'] as string] ?? 0;
+    const bOrd = testOrder[(b as Record<string, unknown>)['test_id'] as string] ?? 0;
+    if (aOrd !== bOrd) return aOrd - bOrd;
+
+    // Trong cùng test: sort theo audio_url để group cùng audio nằm liền nhau
+    const aMedia = (((a as Record<string, unknown>).question_media || []) as Array<{ type: string; url: string }>);
+    const bMedia = (((b as Record<string, unknown>).question_media || []) as Array<{ type: string; url: string }>);
+    const aAudio = aMedia.find(m => m.type === 'audio')?.url || '';
+    const bAudio = bMedia.find(m => m.type === 'audio')?.url || '';
+
+    if (aAudio !== bAudio) {
+      // Có audio trước, không audio sau
+      if (aAudio && !bAudio) return -1;
+      if (!aAudio && bAudio) return 1;
+      return aAudio.localeCompare(bAudio);
+    }
+
+    return ((a as Record<string, unknown>)['order_index'] as number || 0) - ((b as Record<string, unknown>)['order_index'] as number || 0);
+  });
+
+  return sorted.map((q: Record<string, unknown>) => ({
     id: q.id as string,
     part_id: q.part_id as string,
     passage_id: q.passage_id as string | null,
@@ -272,6 +354,22 @@ export async function getGrammar(lesson?: number): Promise<GrammarModel[]> {
   return data || [];
 }
 
+export async function getVocabularyCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('vocabulary')
+    .select('*', { count: 'exact', head: true });
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function getGrammarCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('grammar')
+    .select('*', { count: 'exact', head: true });
+  if (error) return 0;
+  return count || 0;
+}
+
 export async function getLessonNumbers(): Promise<number[]> {
   const { data, error } = await supabase
     .from('vocabulary')
@@ -283,12 +381,31 @@ export async function getLessonNumbers(): Promise<number[]> {
 }
 
 // ========== Writing ==========
-export async function getWritingPrompts(partNumber: number): Promise<WritingPromptModel[]> {
+export async function getWritingPartsCount(): Promise<Record<number, number>> {
   const { data, error } = await supabase
+    .from('writing_prompts')
+    .select('part_number');
+  if (error) throw error;
+  const counts: Record<number, number> = {};
+  for (const row of data || []) {
+    counts[row.part_number] = (counts[row.part_number] || 0) + 1;
+  }
+  return counts;
+}
+
+export async function getWritingPrompts(
+  partNumber: number,
+  questionLimit?: number,
+): Promise<WritingPromptModel[]> {
+  let query = supabase
     .from('writing_prompts')
     .select('*')
     .eq('part_number', partNumber)
     .order('order_index');
+  if (questionLimit && questionLimit > 0) {
+    query = query.limit(questionLimit);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
@@ -338,23 +455,32 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
   const testIds = tests.map((t: { id: string }) => t.id);
   const fallbackTestId = testIds[0];
 
-  const { data: parts, error: partsError } = await supabase
+  // Lấy part từ test đầu tiên để practice dùng (getQuestionsByPartId chỉ nhận 1 partId)
+  const { data: firstTestParts, error: firstPartsError } = await supabase
     .from('test_parts')
     .select('id,test_id,part_number')
-    .in('test_id', testIds)
+    .eq('test_id', fallbackTestId)
     .in('part_number', [1, 2, 3, 4])
     .order('part_number');
-  if (partsError) throw partsError;
-  if (!parts?.length) return [];
+  if (firstPartsError) throw firstPartsError;
 
-  const partIdsByNumber: Record<number, string[]> = { 1: [], 2: [], 3: [], 4: [] };
+  // Map part_number -> part_id của test đầu tiên
+  const partIdsByNumber: Record<number, string> = {};
   const partNumberByPartId: Record<string, number> = {};
-  for (const p of parts as Array<{ id: string; part_number: number }>) {
-    partIdsByNumber[p.part_number]?.push(p.id);
+  for (const p of firstTestParts as Array<{ id: string; part_number: number }>) {
+    partIdsByNumber[p.part_number] = p.id;
     partNumberByPartId[p.id] = p.part_number;
   }
 
-  const allPartIds = Object.keys(partNumberByPartId);
+  // Đếm câu từ TẤT CẢ tests — để hiển thị đúng tổng số câu
+  const { data: allParts, error: allPartsError } = await supabase
+    .from('test_parts')
+    .select('id,part_number')
+    .in('test_id', testIds)
+    .in('part_number', [1, 2, 3, 4]);
+  if (allPartsError) throw allPartsError;
+
+  const allPartIds = (allParts as Array<{ id: string }>).map(p => p.id);
   const { data: questions, error: questionsError } = await supabase
     .from('questions')
     .select('id,part_id')
@@ -405,12 +531,15 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
     }
   }
 
+  // Tính questionCount: tổng từ TẤT CẢ tests cùng part_number
   return [1, 2, 3, 4].map((partNumber) => {
-    const ids = partIdsByNumber[partNumber] || [];
-    const total = ids.reduce((sum, id) => sum + (questionCountByPartId[id] || 0), 0);
+    const partId = partIdsByNumber[partNumber] || `part-${partNumber}`;
+    const total = (allParts || [])
+      .filter((p: { part_number: number }) => p.part_number === partNumber)
+      .reduce((sum, p) => sum + (questionCountByPartId[p.id] || 0), 0);
     const stats = statsByPartNumber[partNumber];
     return {
-      partId: ids[0] || `part-${partNumber}`,
+      partId,
       testId: fallbackTestId,
       partNumber,
       partTitle: `Part ${partNumber}`,
@@ -519,7 +648,6 @@ export async function getWrongReadingQuestionIds(limit = 200): Promise<string[]>
 
 export async function getQuestionsByReadingPartNumber(
   partNumber: number,
-  limit?: number,
 ): Promise<QuestionModel[]> {
   const { data: tests, error: testsError } = await supabase
     .from('tests')
@@ -532,13 +660,14 @@ export async function getQuestionsByReadingPartNumber(
   const testIds = tests.map((t: { id: string }) => t.id);
   const { data: parts, error: partsError } = await supabase
     .from('test_parts')
-    .select('id')
+        .select('id,test_id')
     .in('test_id', testIds)
     .eq('part_number', partNumber);
   if (partsError) throw partsError;
   if (!parts?.length) return [];
 
-  let query = supabase
+  const partIds = (parts as Array<{ id: string }>).map(p => p.id);
+  const { data, error } = await supabase
     .from('questions')
     .select(`
       *,
@@ -546,15 +675,45 @@ export async function getQuestionsByReadingPartNumber(
       question_media(*),
       passages(*)
     `)
-    .in('part_id', parts.map((p: { id: string }) => p.id))
+    .in('part_id', partIds)
     .order('order_index');
 
-  if (limit && limit > 0) query = query.limit(limit);
-
-  const { data, error } = await query;
   if (error) throw error;
 
-  return (data || []).map((q: Record<string, unknown>) => ({
+  // Map test_id vào question
+  const partTestIdMap: Record<string, string> = {};
+  for (const p of (parts || []) as Array<{ id: string; test_id: string }>) {
+    partTestIdMap[p.id] = p.test_id;
+  }
+  const withTestId = (data || []).map((q: Record<string, unknown>) => ({
+    ...q,
+    test_id: partTestIdMap[q.part_id as string],
+  }));
+
+  // Sort: theo test order, rồi group passage trong mỗi test
+  const testOrder: Record<string, number> = {};
+  testIds.forEach((id, idx) => { testOrder[id] = idx; });
+
+  const sorted = [...withTestId].sort((a, b) => {
+    const aOrd = testOrder[(a as Record<string, unknown>)['test_id'] as string] ?? 0;
+    const bOrd = testOrder[(b as Record<string, unknown>)['test_id'] as string] ?? 0;
+    if (aOrd !== bOrd) return aOrd - bOrd;
+
+    // Trong cùng test: group theo passage_id
+    const aPassage = ((a as Record<string, unknown>).passage_id as string | null) || '';
+    const bPassage = ((b as Record<string, unknown>).passage_id as string | null) || '';
+
+    if (aPassage !== bPassage) {
+      // Có passage trước, không passage sau
+      if (aPassage && !bPassage) return -1;
+      if (!aPassage && bPassage) return 1;
+      return aPassage.localeCompare(bPassage);
+    }
+
+    return ((a as Record<string, unknown>)['order_index'] as number || 0) - ((b as Record<string, unknown>)['order_index'] as number || 0);
+  });
+
+  return sorted.map((q: Record<string, unknown>) => ({
     id: q.id as string,
     part_id: q.part_id as string,
     passage_id: q.passage_id as string | null,
@@ -650,23 +809,31 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
   const testIds = tests.map((t: { id: string }) => t.id);
   const fallbackTestId = testIds[0];
 
-  const { data: parts, error: partsError } = await supabase
+  // Lấy part từ test đầu tiên để practice dùng
+  const { data: firstTestParts, error: firstPartsError } = await supabase
     .from('test_parts')
     .select('id,test_id,part_number')
-    .in('test_id', testIds)
+    .eq('test_id', fallbackTestId)
     .in('part_number', [5, 6, 7])
     .order('part_number');
-  if (partsError) throw partsError;
-  if (!parts?.length) return [];
+  if (firstPartsError) throw firstPartsError;
 
-  const partIdsByNumber: Record<number, string[]> = { 5: [], 6: [], 7: [] };
+  const partIdsByNumber: Record<number, string> = {};
   const partNumberByPartId: Record<string, number> = {};
-  for (const p of parts as Array<{ id: string; part_number: number }>) {
-    partIdsByNumber[p.part_number]?.push(p.id);
+  for (const p of firstTestParts as Array<{ id: string; part_number: number }>) {
+    partIdsByNumber[p.part_number] = p.id;
     partNumberByPartId[p.id] = p.part_number;
   }
 
-  const allPartIds = Object.keys(partNumberByPartId);
+  // Đếm câu từ TẤT CẢ tests — để hiển thị đúng tổng số câu
+  const { data: allParts, error: allPartsError } = await supabase
+    .from('test_parts')
+    .select('id,part_number')
+    .in('test_id', testIds)
+    .in('part_number', [5, 6, 7]);
+  if (allPartsError) throw allPartsError;
+
+  const allPartIds = (allParts as Array<{ id: string }>).map(p => p.id);
   const { data: questions, error: questionsError } = await supabase
     .from('questions')
     .select('id,part_id')
@@ -726,12 +893,15 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
     }
   }
 
+  // Tính questionCount: tổng từ TẤT CẢ tests cùng part_number
   return [5, 6, 7].map((partNumber) => {
-    const ids = partIdsByNumber[partNumber] || [];
-    const total = ids.reduce((sum, id) => sum + (questionCountByPartId[id] || 0), 0);
+    const partId = partIdsByNumber[partNumber] || `part-${partNumber}`;
+    const total = (allParts || [])
+      .filter((p: { part_number: number }) => p.part_number === partNumber)
+      .reduce((sum, p) => sum + (questionCountByPartId[p.id] || 0), 0);
     const stats = statsByPartNumber[partNumber];
     return {
-      partId: ids[0] || `part-${partNumber}`,
+      partId,
       testId: fallbackTestId,
       partNumber,
       partTitle: `Part ${partNumber}`,
@@ -751,9 +921,25 @@ export async function signUp(email: string, password: string, fullName: string) 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: {
+      data: { full_name: fullName },
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
   });
-  if (error) throw error;
+
+  if (error) {
+    // Handle common errors with better messages
+    if (error.message.toLowerCase().includes('rate limit')) {
+      throw new Error('Bạn đã yêu cầu quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.');
+    }
+    if (error.message.toLowerCase().includes('already registered') ||
+        error.message.toLowerCase().includes('already exists') ||
+        error.message.toLowerCase().includes('already been registered')) {
+      throw new Error('Email này đã được đăng ký. Vui lòng đăng nhập hoặc sử dụng email khác.');
+    }
+    throw error;
+  }
+
   return data;
 }
 
@@ -1184,4 +1370,115 @@ export async function markMyNotificationAsRead(notificationId: string): Promise<
     .eq('recipient_user_id', user.id);
 
   if (error) throw error;
+}
+
+// ========== Speaking Prompts ==========
+export async function getSpeakingPartsCount(): Promise<Record<number, number>> {
+  const { data, error } = await supabase
+    .from('speaking_prompts')
+    .select('part_number');
+  if (error) throw error;
+  const counts: Record<number, number> = {};
+  for (const row of data || []) {
+    counts[row.part_number] = (counts[row.part_number] || 0) + 1;
+  }
+  return counts;
+}
+
+export async function getSpeakingPrompts(
+  partNumber: number,
+  questionLimit?: number,
+): Promise<SpeakingPromptModel[]> {
+  let query = supabase
+    .from('speaking_prompts')
+    .select('*')
+    .eq('part_number', partNumber)
+    .order('order_index');
+  if (questionLimit && questionLimit > 0) {
+    query = query.limit(questionLimit);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+// ========== Practice History ==========
+export async function savePracticeHistory(params: {
+  userId: string;
+  mode: 'speaking' | 'writing';
+  partNumber: number;
+  promptId: string;
+  promptTitle: string;
+  promptContent: string;
+  userAnswer: string;
+  gradeResult?: AiGradeResult;
+}): Promise<void> {
+  const { error } = await supabase.from('practice_history').insert({
+    user_id: params.userId,
+    mode: params.mode,
+    part_number: params.partNumber,
+    prompt_id: params.promptId,
+    prompt_title: params.promptTitle,
+    prompt_content: params.promptContent,
+    user_answer: params.userAnswer,
+    ai_score: params.gradeResult?.overall ?? null,
+    ai_feedback: params.gradeResult?.feedback ?? null,
+    ai_errors: params.gradeResult?.errors ?? null,
+    ai_task_scores: params.gradeResult?.taskScores ?? null,
+    ai_important_words: params.gradeResult?.importantWords ?? null,
+    ai_suggested_answer: params.gradeResult?.suggestedAnswer ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function getPracticeHistory(
+  userId: string,
+  mode?: 'speaking' | 'writing'
+): Promise<PracticeHistoryItem[]> {
+  let query = supabase
+    .from('practice_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (mode) {
+    query = query.eq('mode', mode);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as unknown as PracticeHistoryItem[];
+}
+
+export async function getRecentPracticeHistory(limit = 5): Promise<PracticeHistoryItem[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('practice_history')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []) as unknown as PracticeHistoryItem[];
+}
+
+export async function getPracticeHistoryByPart(
+  userId: string,
+  mode: 'speaking' | 'writing',
+  partNumber: number
+): Promise<PracticeHistoryItem[]> {
+  const { data, error } = await supabase
+    .from('practice_history')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('mode', mode)
+    .eq('part_number', partNumber)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as unknown as PracticeHistoryItem[];
 }
