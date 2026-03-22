@@ -154,14 +154,14 @@ function SpeakingQuestionContent() {
           console.log(`[SPEAKING] Transcribed text for prompt ${promptId}:`, data.text);
           setTranscribedTexts(prev => ({ ...prev, [promptId]: data.text }));
         } else {
-          console.warn('[SPEAKING] Whisper failed, falling back:', data.error);
-          setTranscribedTexts(prev => ({ ...prev, [promptId]: '' }));
+          console.warn('[SPEAKING] Whisper failed:', data.error);
+          setTranscribedTexts(prev => ({ ...prev, [promptId]: `[Lỗi nhận diện: ${data.error}]` }));
         }
       })
       .catch(err => {
         console.error('[SPEAKING] Transcribe error:', err);
         setTranscribing(false);
-        setTranscribedTexts(prev => ({ ...prev, [promptId]: '' }));
+        setTranscribedTexts(prev => ({ ...prev, [promptId]: '[Lỗi kết nối, vui lòng thử lại]' }));
       });
   }, []);
 
@@ -187,7 +187,7 @@ function SpeakingQuestionContent() {
         if (prev <= 1) {
           clearInterval(countdownRef.current!);
           setShowCountdown(false);
-          startRecording();
+          setTimeout(() => startRecording(), 0);
           return 0;
         }
         return prev - 1;
@@ -270,7 +270,6 @@ function SpeakingQuestionContent() {
       stopRecording();
     } else {
       if (countdownRef.current) clearInterval(countdownRef.current);
-      setShowCountdown(false);
       handleStartCountdown();
     }
   };

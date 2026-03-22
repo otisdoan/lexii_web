@@ -31,21 +31,34 @@ export async function POST(req: Request) {
 
     console.log('[TRANSCRIBE] Sending to Whisper API, file size:', file.size, 'bytes');
 
-    const res = await fetch(WHISPER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: audioFormData,
-    });
+    let retries = 2;
+    let res: Response;
+    while (retries >= 0) {
+      res = await fetch(WHISPER_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: audioFormData,
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('[TRANSCRIBE] Whisper API error:', res.status, errText);
-      return NextResponse.json({ error: `Whisper API error: ${res.status}` }, { status: res.status });
+      if (res.ok) break;
+      if (res.status === 429 && retries > 0) {
+        console.warn('[TRANSCRIBE] Rate limited, retrying in 2s...');
+        await new Promise(r => setTimeout(r, 2000));
+        retries--;
+        continue;
+      }
+      break;
     }
 
-    const data = (await res.json()) as { text?: string };
+    if (!res!.ok) {
+      const errText = await res!.text();
+      console.error('[TRANSCRIBE] Whisper API error:', res!.status, errText);
+      return NextResponse.json({ error: `Whisper lỗi (${res!.status}). Vui lòng thử lại sau giây lát.` }, { status: res!.status });
+    }
+
+    const data = (await res!.json()) as { text?: string };
     const text = (data.text || '').trim();
 
     console.log('[TRANSCRIBE] Whisper result:', text);

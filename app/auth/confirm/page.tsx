@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-export default function ConfirmPage() {
+function ConfirmContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -14,7 +14,6 @@ export default function ConfirmPage() {
   useEffect(() => {
     async function handleConfirm() {
       try {
-        // Force refresh the session from cookies
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -25,7 +24,6 @@ export default function ConfirmPage() {
         }
 
         if (!session) {
-          // Try to refresh
           const { data, error: refreshError } = await supabase.auth.refreshSession();
           if (refreshError || !data.session) {
             setStatus('error');
@@ -37,11 +35,9 @@ export default function ConfirmPage() {
 
         setStatus('success');
         setMessage('Xác nhận thành công! Đang chuyển hướng...');
-
-        // Redirect to home after a short delay
         setTimeout(() => {
           router.push('/home');
-          router.refresh(); // Force refresh to update server components
+          router.refresh();
         }, 1500);
       } catch {
         setStatus('error');
@@ -84,5 +80,17 @@ export default function ConfirmPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-teal-50 via-white to-slate-50">
+        <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    }>
+      <ConfirmContent />
+    </Suspense>
   );
 }
