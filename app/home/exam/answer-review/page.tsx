@@ -228,7 +228,7 @@ function AnswerReviewContent() {
                             {labels[oi]}
                           </span>
                           <span className={isCorrectAnswer ? 'text-green-700' : isUserChoice ? 'text-red-600' : 'text-slate-600'}>
-                            {opt.content}
+                            {opt.content || `Đáp án ${labels[oi]}`}
                           </span>
                           {isCorrectAnswer && <CheckCircle className="w-4 h-4 text-green-500 ml-auto shrink-0" />}
                           {isUserChoice && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-500 ml-auto shrink-0" />}

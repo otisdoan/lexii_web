@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Edit3, BookOpen, Globe, Moon, Hand, Monitor, Download, Bell,
-  Users, Share2, MessageCircle, Star, ChevronRight, LogOut, LogIn, History,
+  Users, Share2, MessageCircle, Star, ChevronRight, LogOut, LogIn, History, Receipt,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUserPremiumSubscriptionInfo, getUserStats } from '@/lib/api';
@@ -97,6 +97,7 @@ export default function SettingsPage() {
 
   const group2: SettingsItem[] = [
     { icon: <History className={iconClass} />, label: 'Lịch sử bài làm đề thi', onClick: () => router.push('/home/settings/test-history') },
+    { icon: <Receipt className={iconClass} />, label: 'Lịch sử giao dịch', onClick: () => router.push('/home/settings/transactions') },
     { icon: <Hand className={iconClass} />, label: 'Giao diện đáp án', onClick: comingSoon },
     { icon: <Monitor className={iconClass} />, label: 'Hiển thị', onClick: comingSoon },
     { icon: <Download className={iconClass} />, label: 'Quản lý tải xuống', onClick: comingSoon },
@@ -106,8 +107,8 @@ export default function SettingsPage() {
   const group3: SettingsItem[] = [
     { icon: <Users className={iconClass} />, label: 'Tham gia cộng đồng Lexii TOEIC', onClick: comingSoon },
     { icon: <Share2 className={iconClass} />, label: 'Chia sẻ ứng dụng', onClick: comingSoon },
-    { icon: <MessageCircle className={iconClass} />, label: 'Phản hồi & hỗ trợ', onClick: comingSoon },
-    { icon: <Star className={iconClass} />, label: 'Đánh giá 5 sao', onClick: comingSoon },
+    { icon: <MessageCircle className={iconClass} />, label: 'Phản hồi & hỗ trợ', onClick: () => router.push('/home/support') },
+    { icon: <Star className={iconClass} />, label: 'Đánh giá 5 sao', onClick: () => router.push('/home/settings/reviews') },
   ];
 
   return (

@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star, Loader2, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
+import { ChevronLeft, BookOpen, Headphones, BarChart2, BookMarked, Sparkles, Check, Lock, Star, Loader2, AlertCircle, CheckCircle2, Copy, User as UserIcon } from 'lucide-react';
 import { createPayosPayment, getUserProfile } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
@@ -85,10 +85,20 @@ const FEATURES = [
   { feature: 'Loại bỏ quảng cáo', free: false, premium: true },
 ];
 
-const REVIEWS = [
-  { name: 'Chàng Thơ', stars: 5, text: '"App cực kỳ chất lượng, đề thi sát với thực tế. Mình đã đạt được 850+ nhờ luyện tập đều đặn trên đây. Rất đáng đồng tiền bát gạo!"' },
-  { name: 'Minh Trí', stars: 5, text: '"Giải thích chi tiết từng câu hỏi, rất dễ hiểu. Chỉ sau 2 tháng tôi đã tăng thêm 150 điểm!"' },
-];
+interface ReviewItem {
+  id: string;
+  user_name: string;
+  user_avatar?: string;
+  rating: number;
+  content: string;
+}
+
+type ReviewDBRow = {
+  id: string;
+  profiles: { full_name?: string; avatar_url?: string } | null;
+  rating: number;
+  content: string;
+};
 
 function UpgradePageContent() {
   const router = useRouter();
@@ -100,8 +110,40 @@ function UpgradePageContent() {
   const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [qrContent, setQrContent] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   const advance = useCallback(() => setSlide(s => (s + 1) % SLIDES.length), []);
+
+  // Fetch top 5-star reviews
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('id, profiles:user_id(full_name, avatar_url), rating, content')
+          .eq('rating', 5)
+          .order('likes_count', { ascending: false })
+          .limit(10);
+
+        if (error) throw error;
+
+        const mapped: ReviewItem[] = (data as ReviewDBRow[] || []).map((r: ReviewDBRow) => ({
+          id: r.id,
+          user_name: r.profiles?.full_name || 'Người dùng',
+          user_avatar: r.profiles?.avatar_url || '',
+          rating: r.rating,
+          content: r.content,
+        }));
+
+        setReviews(mapped);
+      } catch (err) {
+        console.error('Error fetching reviews:', err);
+      }
+    };
+
+    fetchReviews();
+  }, []);
 
   const loadPremiumStatus = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -485,34 +527,65 @@ function UpgradePageContent() {
           <hr className="border-slate-100" />
           <div className="px-4 py-3 flex items-center">
             <span className="flex-2 text-sm font-medium text-slate-600">Mở khóa đề thi thử</span>
-            <span className="w-17.5 text-center text-sm font-bold text-slate-500">4</span>
-            <span className="w-17.5 text-center text-sm font-bold text-primary">30</span>
+            <span className="w-17.5 text-center text-sm font-bold text-slate-500">3</span>
+            <span className="w-17.5 text-center text-sm font-bold text-primary">80+</span>
           </div>
         </div>
 
         {/* User reviews */}
         <div>
           <h3 className="text-base font-bold text-slate-800 mb-3">Phản hồi của người dùng</h3>
-          <div className="space-y-3">
-            {REVIEWS.map((review, i) => (
-              <div key={i} className="bg-white rounded-xl p-4 shadow-sm">
-                <div className="flex items-center gap-3 mb-2.5">
-                  <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center text-sm font-bold text-primary">
-                    {review.name[0]}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{review.name}</p>
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: review.stars }).map((_, j) => (
-                        <Star key={j} className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                      ))}
+          {reviews.length === 0 ? (
+            <div className="bg-white rounded-xl p-6 shadow-sm text-center">
+              <p className="text-sm text-slate-500">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {(showAllReviews ? reviews : reviews.slice(0, 5)).map((review) => (
+                  <div key={review.id} className="bg-white rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center gap-3 mb-2.5">
+                      {review.user_avatar ? (
+                        <img src={review.user_avatar} alt={review.user_name} className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center">
+                          <UserIcon className="w-5 h-5 text-primary" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{review.user_name}</p>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: review.rating }).map((_, j) => (
+                            <Star key={j} className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                    <p className="text-xs text-slate-600 italic leading-relaxed">&ldquo;{review.content}&rdquo;</p>
                   </div>
-                </div>
-                <p className="text-xs text-slate-600 italic leading-relaxed">{review.text}</p>
+                ))}
               </div>
-            ))}
-          </div>
+              {reviews.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (showAllReviews && reviews.length > 5) {
+                      setShowAllReviews(false);
+                    } else {
+                      router.push('/home/settings/reviews');
+                    }
+                  }}
+                  className="mt-4 w-full py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
+                  style={{
+                    backgroundColor: PRIMARY,
+                    color: '#fff',
+                    boxShadow: `0 4px 12px rgba(28,156,140,0.2)`,
+                  }}
+                >
+                  {showAllReviews && reviews.length > 5 ? 'Thu gọn' : `Xem thêm đánh giá (${reviews.length})`}
+                </button>
+              )}
+            </>
+          )}
         </div>
 
       </div>

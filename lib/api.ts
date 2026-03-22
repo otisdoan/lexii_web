@@ -1145,6 +1145,53 @@ export async function getAdminSubscriptionTransactions(limit = 300): Promise<Sub
   });
 }
 
+export async function getUserTransactions(): Promise<SubscriptionTransactionItem[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data: orders, error: ordersError } = await supabase
+    .from('subscription_orders')
+    .select('id,user_id,plan_id,plan_name,amount,currency,order_code,status,provider,is_lifetime,paid_at,created_at,granted_until')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+  if (ordersError) throw ordersError;
+
+  if (!orders?.length) return [];
+
+  return (orders as Array<{
+    id: string;
+    user_id: string;
+    plan_id: string;
+    plan_name: string;
+    amount: number;
+    currency: string;
+    order_code: number;
+    status: string;
+    provider: string;
+    is_lifetime: boolean;
+    paid_at: string | null;
+    created_at: string;
+    granted_until: string | null;
+  }>).map((order) => ({
+    id: order.id,
+    userId: order.user_id,
+    userName: '',
+    userPhone: null,
+    planId: order.plan_id,
+    planName: order.plan_name,
+    amount: order.amount,
+    currency: order.currency,
+    orderCode: order.order_code,
+    status: order.status,
+    provider: order.provider,
+    isLifetime: Boolean(order.is_lifetime),
+    paidAt: order.paid_at,
+    createdAt: order.created_at,
+    grantedUntil: order.granted_until,
+    premiumExpiresAt: null,
+  }));
+}
+
 export async function getUserAttemptHistory(limit = 50): Promise<AttemptHistoryItem[]> {
   const user = await getCurrentUser();
   if (!user) return [];

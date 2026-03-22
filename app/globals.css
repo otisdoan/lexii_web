@@ -4,9 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-primary: #0D9488;
-  --color-primary-dark: #0F766E;
-  --color-primary-light: #CCFBF1;
+  --color-primary: #00a596;
+  --color-primary-dark: #008578;
+  --color-primary-light: #D1FAF3;
   --color-background: #F6F8F6;
   --color-surface: #FFFFFF;
   --color-text-dark: #333333;
@@ -113,4 +113,13 @@
     background-size: 320% 320%;
     animation: premium-rainbow-flow 2.4s linear infinite;
   }
+}
+
+/* Hide scrollbar UI but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

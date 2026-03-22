@@ -17,9 +17,11 @@ import {
   BellRing,
   Menu,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
+import AdminChatPopup from '@/components/chat/admin-chat-popup';
 
 const NAV_PAGE_SIZE = 10;
 
@@ -33,10 +35,11 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'Người dùng', icon: Users },
   { href: '/admin/tests', label: 'Đề thi', icon: FileText },
-  { href: '/admin/transactions', label: 'Giao dịch', icon: Receipt },
-  { href: '/admin/notifications', label: 'Thông báo', icon: BellRing },
   { href: '/admin/vocabulary', label: 'Từ vựng', icon: BookOpen },
   { href: '/admin/grammar', label: 'Ngữ pháp', icon: ScrollText },
+  { href: '/admin/transactions', label: 'Giao dịch', icon: Receipt },
+  { href: '/admin/notifications', label: 'Thông báo', icon: BellRing },
+  { href: '/admin/chat', label: 'Phản hồi', icon: MessageSquare },
   { href: '/admin/settings', label: 'Cài đặt', icon: Settings },
 ];
 
@@ -52,8 +55,40 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   const [navPage, setNavPage] = useState(0);
+  const [totalUnread, setTotalUnread] = useState(0);
   const totalNavPages = Math.ceil(navItems.length / NAV_PAGE_SIZE);
   const visibleItems = navItems.slice(navPage * NAV_PAGE_SIZE, (navPage + 1) * NAV_PAGE_SIZE);
+
+  // Fetch and listen for unread messages
+  useEffect(() => {
+    const fetchUnread = async () => {
+      // Get total unread (messages where is_read = false and sender_role = user)
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('sender_role', 'user')
+        .eq('is_read', false);
+
+      setTotalUnread(count || 0);
+    };
+
+    fetchUnread();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('admin-sidebar-unread')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
+        fetchUnread();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, () => {
+        fetchUnread();
+      })
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -84,6 +119,7 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
           {visibleItems.map(item => {
             const Icon = item.icon;
             const active = isActive(item);
+            const isChat = item.href === '/admin/chat';
             return (
               <Link
                 key={item.href}
@@ -95,7 +131,14 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
                     : 'text-teal-100 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-primary' : 'text-teal-200 group-hover:text-white'}`} />
+                <div className="relative">
+                  <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-primary' : 'text-teal-200 group-hover:text-white'}`} />
+                  {isChat && totalUnread > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                      {totalUnread > 9 ? '9+' : totalUnread}
+                    </span>
+                  )}
+                </div>
                 {item.label}
                 {active && <ChevronRight className="w-3.5 h-3.5 ml-auto text-primary/50" />}
               </Link>
@@ -235,7 +278,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <NotificationBell notificationsPageHref="/admin/notifications" />
               {user?.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar} alt="avatar" className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20" />
+                <img src={user.avatar} alt="avatar" className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20 ml-4" />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary to-teal-400 flex items-center justify-center text-white font-bold text-sm">
                   {user?.name?.[0]?.toUpperCase() || 'A'}
@@ -250,6 +293,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Chat popup */}
+      <AdminChatPopup />
     </div>
   );
 }

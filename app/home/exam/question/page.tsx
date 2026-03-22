@@ -735,6 +735,7 @@ function ExamQuestionContent() {
                 <div className="space-y-2">
                   {question.options.map((option, optIdx) => {
                     const isSelected = userAnswers[globalIndex] === optIdx;
+                    const isPart12 = (currentPart?.part_number ?? 0) <= 2;
                     return (
                       <button
                         key={option.id}
@@ -750,9 +751,17 @@ function ExamQuestionContent() {
                         }`}>
                           {labels[optIdx]}
                         </span>
-                        <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
-                          {option.content}
-                        </span>
+                        {isPart12 ? (
+                          <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-400'}`}>
+                            Đáp án {labels[optIdx]}
+                          </span>
+                        ) : option.content ? (
+                          <span className={`text-sm ${isSelected ? 'text-primary font-medium' : 'text-slate-700'}`}>
+                            {option.content}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-slate-400 italic">Không có nội dung</span>
+                        )}
                       </button>
                     );
                   })}

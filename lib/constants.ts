@@ -4,9 +4,9 @@ export const TRADEMARK_DISCLAIMER =
   'TOEIC® is a registered trademark of ETS. This product is not endorsed or approved by ETS.';
 
 export const COLORS = {
-  primary: '#0D9488',
-  primaryDark: '#0F766E',
-  primaryLight: '#CCFBF1',
+  primary: '#00a596',
+  primaryDark: '#008578',
+  primaryLight: '#D1FAF3',
   background: '#F6F8F6',
   surface: '#FFFFFF',
   textDark: '#333333',

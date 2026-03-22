@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ result: fallback }, { status: 200 });
   }
 
-  const { mode, taskType, prompt, answer } = body;
+    const { mode, taskType, prompt, answer } = body;
 
   // ============================================================
   // DEBUG LOG: raw incoming request
@@ -42,16 +42,16 @@ export async function POST(req: Request) {
   console.log('[GRADE] answer words:', answer.trim().split(/\s+/).filter(Boolean).length, 'words');
   console.log('[GRADE] ==============================');
 
-  if (!mode || !taskType || !prompt) {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-  }
+    if (!mode || !taskType || !prompt) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
   // --- AI grading (deterministic with temperature: 0) ---
   if (apiKey) {
     try {
-      const promptText = buildPrompt({ mode, taskType, prompt, answer });
+    const promptText = buildPrompt({ mode, taskType, prompt, answer });
 
       // ============================================================
       // DEBUG LOG: exact prompt sent to Gemini
@@ -60,26 +60,26 @@ export async function POST(req: Request) {
       console.log(promptText);
       console.log('[GRADE] ==============================');
 
-      const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
+    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
           generationConfig: {
             temperature: 0,
             topP: 1,
             topK: 1,
           },
-        }),
-      });
+      }),
+    });
 
       if (res.ok) {
-        const data = (await res.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
+    const data = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
 
-        const raw =
-          data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+    const raw =
+      data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
 
         // ============================================================
         // DEBUG LOG: raw response from Gemini
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
         console.log(raw);
         console.log('[GRADE] ==============================');
 
-        const parsed = safeParseJson(raw);
+    const parsed = safeParseJson(raw);
 
         // ============================================================
         // DEBUG LOG: parsed JSON from Gemini
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
         console.log('[GRADE] ==============================');
 
         if (parsed) {
-          const result = normalizeResult(parsed, mode, taskType, prompt, answer);
+    const result = normalizeResult(parsed, mode, taskType, prompt, answer);
 
           // ============================================================
           // DEBUG LOG: final result returned to client
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
           console.log('[GRADE] suggestedAnswer:', result.suggestedAnswer);
           console.log('[GRADE] ==============================');
 
-          return NextResponse.json({ result });
+    return NextResponse.json({ result });
         }
       } else {
         // ============================================================

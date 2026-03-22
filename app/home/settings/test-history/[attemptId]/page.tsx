@@ -160,7 +160,7 @@ export default function AttemptHistoryDetailPage() {
                       }`}
                     >
                       <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
-                      {opt.content}
+                      {opt.content || `Đáp án ${String.fromCharCode(65 + i)}`}
                     </div>
                   );
                 })}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Receipt, RefreshCw, Search, CalendarClock, Crown, CheckCircle2, CircleAlert, Clock3, XCircle } from 'lucide-react';
+import { Receipt, RefreshCw, Search, CalendarClock, Crown, CheckCircle2, CircleAlert, Clock3, XCircle, Wallet } from 'lucide-react';
 import { getAdminSubscriptionTransactions } from '@/lib/api';
 import type { SubscriptionTransactionItem } from '@/lib/types';
 
@@ -109,6 +109,10 @@ export default function AdminTransactionsPage() {
   }, [page, totalPages]);
 
   const paidCount = rows.filter((r) => r.status.toLowerCase() === 'paid').length;
+  const totalRevenue = useMemo(
+    () => rows.filter((r) => r.status.toLowerCase() === 'paid').reduce((sum, r) => sum + (r.amount || 0), 0),
+    [rows]
+  );
 
   return (
     <div className="space-y-5">
@@ -125,7 +129,14 @@ export default function AdminTransactionsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+            <Wallet className="w-4 h-4 text-emerald-600" /> Tổng doanh thu
+          </div>
+          <p className="text-2xl font-bold text-emerald-700">{formatCurrency(totalRevenue)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Từ {paidCount} giao dịch thành công</p>
+        </div>
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
             <Receipt className="w-4 h-4" /> Tổng giao dịch

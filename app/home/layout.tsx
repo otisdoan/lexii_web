@@ -6,11 +6,14 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   GraduationCap,
-  BookMarked,
   Sparkles,
   Crown,
   Settings,
   Flame,
+  BookText,
+  PenTool,
+  Headphones,
+  Star,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
@@ -25,8 +28,11 @@ interface UserInfo {
 const navItems = [
   { href: '/home', label: 'Luyện tập', icon: BookOpen },
   { href: '/home/exam', label: 'Thi', icon: GraduationCap },
-  { href: '/home/theory', label: 'Lý thuyết', icon: BookMarked },
+  { href: '/home/vocabulary', label: 'Từ vựng', icon: BookText },
+  { href: '/home/grammar', label: 'Ngữ pháp', icon: PenTool },
   { href: '/home/upgrade', label: 'Nâng cấp', icon: Sparkles },
+  { href: '/home/settings/reviews', label: 'Đánh giá', icon: Star },
+  { href: '/home/support', label: 'Liên hệ', icon: Headphones },
   { href: '/home/settings', label: 'Cài đặt', icon: Settings },
 ];
 
