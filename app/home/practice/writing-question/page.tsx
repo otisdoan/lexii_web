@@ -296,7 +296,7 @@ function WritingQuestionContent() {
 
           {/* RIGHT: Ô viết */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col min-h-[400px]">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col min-h-100">
               {/* Editor toolbar */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">

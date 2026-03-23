@@ -63,7 +63,7 @@ function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: b
           <span className="text-xs font-black text-primary">B{item.lesson}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="font-bold text-slate-800 text-sm leading-tight">{item.title}</h4>
+          <h4 className="font-bold text-slate-800 text-sm leading-tight break-words">{item.title}</h4>
           {item.formula && (
             <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">{item.formula}</p>
           )}
@@ -88,7 +88,7 @@ function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: b
                 <AlignLeft className="w-3.5 h-3.5 text-slate-400" />
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Giải thích</p>
               </div>
-              <p className="text-sm text-slate-700 leading-relaxed">{item.content}</p>
+              <p className="text-sm text-slate-700 leading-relaxed break-words whitespace-pre-wrap">{item.content}</p>
             </div>
           )}
 
@@ -108,7 +108,7 @@ function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: b
                     <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                       {i + 1}
                     </div>
-                    <p className="text-sm text-slate-700 leading-relaxed flex-1">{ex}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed flex-1 break-words whitespace-pre-wrap">{ex}</p>
                   </div>
                 ))}
               </div>
@@ -119,7 +119,7 @@ function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: b
           {item.related_topics && item.related_topics.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {item.related_topics.map((topic, i) => (
-                <span key={i} className="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-medium hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer">
+                <span key={i} className="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-medium hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer break-all max-w-full">
                   #{topic}
                 </span>
               ))}
@@ -193,13 +193,13 @@ export default function GrammarPage() {
   };
 
   return (
-    <div className="pb-20 lg:pb-8">
+    <div className="pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full px-1 sm:px-0">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-6 min-w-0">
         <div className="w-10 h-10 bg-linear-to-br from-primary to-teal-600 rounded-xl flex items-center justify-center shadow-md">
           <Sparkles className="w-5 h-5 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-800">Ngữ pháp TOEIC</h1>
           <p className="text-sm text-slate-500">{total} chủ đề</p>
         </div>
@@ -279,15 +279,15 @@ export default function GrammarPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-          <p className="text-xs text-slate-500">
+        <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500 shrink-0">
             {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / {total} chủ đề
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 max-w-full overflow-x-auto pb-1 scrollbar-hide">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -310,7 +310,7 @@ export default function GrammarPage() {
                   <button
                     key={p}
                     onClick={() => setPage(p as number)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+                    className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
                       page === p
                         ? 'bg-primary text-white shadow-sm'
                         : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -325,7 +325,7 @@ export default function GrammarPage() {
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page === totalPages - 1}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

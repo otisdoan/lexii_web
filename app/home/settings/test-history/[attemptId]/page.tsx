@@ -78,7 +78,7 @@ export default function AttemptHistoryDetailPage() {
         <h1 className="text-lg font-semibold text-white flex-1 text-center pr-10">Chi tiết bài làm</h1>
       </div>
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="py-4 space-y-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
           <p className="font-semibold text-slate-800">{detail.testTitle}</p>
           <p className="text-xs text-slate-500 mt-1">Nộp lúc: {formatDateTime(detail.submittedAt)}</p>

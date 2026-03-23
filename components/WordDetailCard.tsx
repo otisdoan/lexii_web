@@ -160,7 +160,7 @@ export function WordDetailCard({ result, onClose }: WordDetailCardProps) {
                           {def.example && (
                             <div className="bg-amber-50 rounded-lg p-2.5">
                               <p className="text-xs font-semibold text-amber-700 mb-1 uppercase tracking-wide">Ví dụ</p>
-                              <p className="text-sm text-slate-700 italic leading-relaxed">"{def.example}"</p>
+                              <p className="text-sm text-slate-700 italic leading-relaxed">&quot;{def.example}&quot;</p>
                             </div>
                           )}
                           {def.synonyms && def.synonyms.length > 0 && (

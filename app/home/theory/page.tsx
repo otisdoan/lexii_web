@@ -1,15 +1,25 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Volume2, Star, ChevronDown, ChevronLeft, ChevronRight, Mic, Search, CheckCircle, XCircle } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { ArrowLeft, Volume2, Star, ChevronDown, ChevronLeft, ChevronRight, Search, CheckCircle, XCircle } from 'lucide-react';
 import { getVocabulary, getGrammar, getLessonNumbers } from '@/lib/api';
 import { WordDetailCard } from '@/components/WordDetailCard';
 import type { VocabularyModel, GrammarModel } from '@/lib/types';
 import type { DictResult } from '@/components/WordDetailCard';
 
 const SCORE_LEVELS = ['Tất cả', '450+', '600+', '800+', '990+'];
-const MODES = ['Chọn', 'Flashcards', 'Định nghĩa', 'Chọn từ'];
+const MODES = [
+  'Danh sách',
+  'Flashcard',
+  'Trắc nghiệm',
+  'Ghép cặp',
+  'Điền từ',
+  'Nghe chọn từ',
+  'Sắp chữ',
+  '60 giây',
+  'Lật ô nhớ',
+];
 
 // Fisher-Yates shuffle
 function shuffle<T>(arr: T[]): T[] {
@@ -67,6 +77,8 @@ function VocabularyTab() {
   const [selectedLesson, setSelectedLesson] = useState(1);
   const [selectedScore, setSelectedScore] = useState('Tất cả');
   const [selectedMode, setSelectedMode] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [englishToVietnamese, setEnglishToVietnamese] = useState(true);
   const [words, setWords] = useState<VocabularyModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [lessonOpen, setLessonOpen] = useState(false);
@@ -87,6 +99,16 @@ function VocabularyTab() {
   const [qCorrect, setQCorrect] = useState(0);
   const [qShowResult, setQShowResult] = useState(false);
 
+  const filteredWords = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return words;
+    return words.filter(w =>
+      w.word.toLowerCase().includes(q) ||
+      w.definition.toLowerCase().includes(q) ||
+      (w.phonetic || '').toLowerCase().includes(q)
+    );
+  }, [words, searchInput]);
+
   useEffect(() => {
     getLessonNumbers().then(ls => {
       if (ls.length) setLessons(ls);
@@ -101,6 +123,17 @@ function VocabularyTab() {
       .catch(() => setWords([]))
       .finally(() => { setLoading(false); setFcIndex(0); setFcFlipped(false); setQIndex(0); setQSelected(null); setQCorrect(0); setQShowResult(false); });
   }, [selectedLesson, selectedScore]);
+
+  useEffect(() => {
+    if (filteredWords.length === 0) {
+      setFcIndex(0);
+      setQIndex(0);
+      setQSelected(null);
+      return;
+    }
+    if (fcIndex >= filteredWords.length) setFcIndex(0);
+    if (qIndex >= filteredWords.length) setQIndex(0);
+  }, [filteredWords, fcIndex, qIndex]);
 
   const toggleFav = (id: string) => {
     setFavorites(prev => {
@@ -158,35 +191,32 @@ function VocabularyTab() {
     }
   };
 
-  const word = words[fcIndex];
+  const word = filteredWords[fcIndex];
 
   // Quiz options
   const quizOptions = useMemo(() => {
-    if (words.length === 0 || !word) return [];
-    if (selectedMode === 2) {
-      // Definition → pick word
-      const correctWord = word.word;
-      const others = shuffle(words.filter(w => w.word !== correctWord).map(w => w.word)).slice(0, 3);
-      return shuffle([correctWord, ...others]);
-    } else {
-      // Word → pick definition
+    if (filteredWords.length === 0 || !word) return [];
+    if (englishToVietnamese) {
       const correctDef = word.definition;
-      const others = shuffle(words.filter(w => w.definition !== correctDef).map(w => w.definition)).slice(0, 3);
+      const others = shuffle(filteredWords.filter(w => w.definition !== correctDef).map(w => w.definition)).slice(0, 3);
       return shuffle([correctDef, ...others]);
     }
-  }, [words, fcIndex, selectedMode]);
+    const correctWord = word.word;
+    const others = shuffle(filteredWords.filter(w => w.word !== correctWord).map(w => w.word)).slice(0, 3);
+    return shuffle([correctWord, ...others]);
+  }, [filteredWords, word, englishToVietnamese]);
 
   const handleQuizPick = (i: number) => {
-    if (qSelected !== null) return;
+    if (qSelected !== null || !word) return;
     setQSelected(i);
-    const isCorrect = selectedMode === 2
-      ? quizOptions[i] === word.word
-      : quizOptions[i] === word.definition;
+    const isCorrect = englishToVietnamese
+      ? quizOptions[i] === word.definition
+      : quizOptions[i] === word.word;
     if (isCorrect) setQCorrect(c => c + 1);
   };
 
   const handleQuizNext = () => {
-    if (qIndex < words.length - 1) {
+    if (qIndex < filteredWords.length - 1) {
       setQIndex(i => i + 1);
       setQSelected(null);
       setFcFlipped(false);
@@ -198,9 +228,6 @@ function VocabularyTab() {
   const resetAll = () => {
     setFcIndex(0); setFcFlipped(false); setQIndex(0); setQSelected(null); setQCorrect(0); setQShowResult(false);
   };
-
-  const modeLabels = ['Danh sách', 'Flashcards', 'Ghép nghĩa', 'Ghép từ'];
-  const modeIcons = ['list', 'cards', 'link', 'type'];
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -255,15 +282,27 @@ function VocabularyTab() {
 
           {/* Word count */}
           <div className="px-3 py-1.5 bg-slate-100 rounded-xl">
-            <span className="text-xs font-semibold text-slate-500">{words.length} từ</span>
+            <span className="text-xs font-semibold text-slate-500">{filteredWords.length} từ</span>
           </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 bg-white border-b border-slate-100">
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Tìm từ hoặc nghĩa..."
+            className="w-full h-10 rounded-xl border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-primary/50"
+          />
         </div>
       </div>
 
       {/* ── Mode selector ── */}
       <div className="px-4 py-3 bg-white border-b border-slate-100">
-        <div className="grid grid-cols-4 gap-2">
-          {modeLabels.map((label, i) => (
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {MODES.map((label, i) => (
             <button
               key={i}
               onClick={() => { setSelectedMode(i); resetAll(); }}
@@ -277,6 +316,23 @@ function VocabularyTab() {
             </button>
           ))}
         </div>
+
+        {selectedMode !== 0 && (
+          <div className="mt-3 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-600">
+              {englishToVietnamese ? 'Chế độ EN -> VI' : 'Chế độ VI -> EN'}
+            </span>
+            <button
+              onClick={() => {
+                setEnglishToVietnamese(v => !v);
+                resetAll();
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-white border border-blue-200 text-primary font-bold"
+            >
+              Đổi
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Content area ── */}
@@ -287,7 +343,7 @@ function VocabularyTab() {
               <div key={i} className="h-20 bg-white rounded-2xl animate-pulse border border-slate-100" />
             ))}
           </div>
-        ) : words.length === 0 ? (
+        ) : filteredWords.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <Search className="w-12 h-12 mb-3 opacity-50" />
             <p className="text-sm font-medium">Không có từ vựng</p>
@@ -297,7 +353,7 @@ function VocabularyTab() {
             {/* ── Mode 0: Vocab List ── */}
             {selectedMode === 0 && (
               <div className="p-3 space-y-2 pb-6">
-                {words.map(w => (
+                {filteredWords.map(w => (
                   <VocabWordCard
                     key={w.id}
                     word={w}
@@ -312,28 +368,28 @@ function VocabularyTab() {
             )}
 
             {/* ── Mode 1: Flashcards ── */}
-            {selectedMode === 1 && (
+            {selectedMode === 1 && word && (
               <FlashcardView
                 word={word}
                 index={fcIndex}
-                total={words.length}
+                total={filteredWords.length}
                 isFlipped={fcFlipped}
                 onFlip={() => setFcFlipped(!fcFlipped)}
                 onPrev={() => { if (fcIndex > 0) { setFcIndex(i => i - 1); setFcFlipped(false); }}}
-                onNext={() => { if (fcIndex < words.length - 1) { setFcIndex(i => i + 1); setFcFlipped(false); }}}
+                onNext={() => { if (fcIndex < filteredWords.length - 1) { setFcIndex(i => i + 1); setFcFlipped(false); }}}
                 onFav={toggleFav}
-                isFav={favorites.has(word.id)}
+                isFav={word ? favorites.has(word.id) : false}
               />
             )}
 
-            {/* ── Mode 2 & 3: Quiz ── */}
-            {(selectedMode === 2 || selectedMode === 3) && !qShowResult && (
+            {/* ── Mode 2: Quiz ── */}
+            {selectedMode === 2 && !qShowResult && word && (
               <QuizView
                 word={word}
                 options={quizOptions}
-                mode={selectedMode}
+                mode={englishToVietnamese ? 3 : 2}
                 index={qIndex}
-                total={words.length}
+                total={filteredWords.length}
                 correct={qCorrect}
                 selected={qSelected}
                 onPick={handleQuizPick}
@@ -342,12 +398,48 @@ function VocabularyTab() {
             )}
 
             {/* ── Quiz Result ── */}
-            {(selectedMode === 2 || selectedMode === 3) && qShowResult && (
+            {selectedMode === 2 && qShowResult && (
               <QuizResultView
                 correct={qCorrect}
-                total={words.length}
+                total={filteredWords.length}
                 onRetry={resetAll}
               />
+            )}
+
+            {selectedMode === 3 && (
+              <MatchingMode key={`matching-${filteredWords.length}`} words={filteredWords} />
+            )}
+
+            {selectedMode === 4 && (
+              <FillBlankMode
+                key={`fill-${englishToVietnamese}-${filteredWords.length}`}
+                words={filteredWords}
+                englishToVietnamese={englishToVietnamese}
+              />
+            )}
+
+            {selectedMode === 5 && (
+              <ListeningMode key={`listen-${filteredWords.length}`} words={filteredWords} />
+            )}
+
+            {selectedMode === 6 && (
+              <SpellingMode
+                key={`spell-${englishToVietnamese}-${filteredWords.length}`}
+                words={filteredWords}
+                englishToVietnamese={englishToVietnamese}
+              />
+            )}
+
+            {selectedMode === 7 && (
+              <SpeedMode
+                key={`speed-${englishToVietnamese}-${filteredWords.length}`}
+                words={filteredWords}
+                englishToVietnamese={englishToVietnamese}
+              />
+            )}
+
+            {selectedMode === 8 && (
+              <MemoryMode key={`memory-${filteredWords.length}`} words={filteredWords} />
             )}
           </>
         )}
@@ -367,7 +459,7 @@ function VocabularyTab() {
               {selectedDictLoading ? (
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-12 flex flex-col items-center gap-4">
                   <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                  <p className="text-slate-500 font-medium">Đang tra từ "{selectedWord.word}"...</p>
+                  <p className="text-slate-500 font-medium">Đang tra từ &quot;{selectedWord.word}&quot;...</p>
                 </div>
               ) : selectedDictResult ? (
                 <>
@@ -398,12 +490,6 @@ function VocabWordCard({ word, isPlaying, isFav, onPlay, onFav, onWordClick }: {
   onFav: (id: string) => void;
   onWordClick: (word: VocabularyModel) => void;
 }) {
-  const score = SCORE_LEVELS.find(s => {
-    if (s === 'Tất cả') return word.score_level === 0;
-    const lvl = parseInt(s);
-    return word.score_level === lvl;
-  }) || 'Tất cả';
-
   return (
     <div
       onClick={() => onWordClick(word)}
@@ -637,234 +723,378 @@ function QuizResultView({ correct, total, onRetry }: { correct: number; total: n
   );
 }
 
-// ── Mode 0: Vocab List ──────────────────────────────────────────
+function MatchingMode({ words }: { words: VocabularyModel[] }) {
+  const pairs = useMemo(() => shuffle(words).slice(0, Math.min(6, words.length)), [words]);
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const rightItems = useMemo(
+    () => shuffle(pairs.map(w => ({ id: w.id, definition: w.definition }))),
+    [pairs],
+  );
+  const [matched, setMatched] = useState<Set<string>>(new Set());
 
-// ── Mode 1: Flashcards ──────────────────────────────────────────
-
-function FlashcardMode({ words }: { words: VocabularyModel[] }) {
-  const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  const word = words[index];
+  const completed = matched.size === pairs.length;
 
   return (
-    <div className="p-4 sm:p-6 flex flex-col items-center min-h-125">
-      {/* Progress */}
-      <div className="w-full flex items-center justify-between text-sm text-slate-500 mb-2">
-        <span>{index + 1} / {words.length}</span>
-        <span className="text-xs text-slate-400">Nhấn thẻ để lật</span>
-      </div>
-      <div className="w-full h-1.5 bg-slate-100 rounded-full mb-6 overflow-hidden">
-        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${((index + 1) / words.length) * 100}%` }} />
+    <div className="p-4 space-y-3 pb-6">
+      <div className="text-sm font-semibold text-slate-600">Ghép từ với nghĩa tương ứng</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          {pairs.map(item => {
+            const isMatched = matched.has(item.id);
+            const isSelected = selectedWord === item.id;
+            return (
+              <button
+                key={item.id}
+                disabled={isMatched}
+                onClick={() => setSelectedWord(item.id)}
+                className={`w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${
+                  isMatched
+                    ? 'bg-green-50 border-green-300 text-green-700'
+                    : isSelected
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-white border-slate-200 text-slate-700'
+                }`}
+              >
+                {item.word}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="space-y-2">
+          {rightItems.map(item => {
+            const isMatched = matched.has(item.id);
+            return (
+              <button
+                key={item.id}
+                disabled={isMatched || !selectedWord}
+                onClick={() => {
+                  if (!selectedWord) return;
+                  if (selectedWord === item.id) {
+                    setMatched(prev => new Set(prev).add(item.id));
+                  }
+                  setSelectedWord(null);
+                }}
+                className={`w-full rounded-xl border p-3 text-left text-sm transition ${
+                  isMatched
+                    ? 'bg-green-50 border-green-300 text-green-700'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-primary/40'
+                }`}
+              >
+                {item.definition}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Card */}
+      {completed && (
+        <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm font-semibold text-green-700">
+          Hoàn thành ghép cặp.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FillBlankMode({ words, englishToVietnamese }: { words: VocabularyModel[]; englishToVietnamese: boolean }) {
+  const [index, setIndex] = useState(0);
+  const [value, setValue] = useState('');
+  const [checked, setChecked] = useState(false);
+  const [correct, setCorrect] = useState(false);
+
+  const item = words[index];
+  if (!item) return null;
+
+  const answer = (englishToVietnamese ? item.definition : item.word).trim().toLowerCase();
+  const prompt = englishToVietnamese ? item.word : item.definition;
+
+  return (
+    <div className="p-4 pb-6 space-y-4">
+      <div className="text-xs font-semibold text-slate-500">{index + 1} / {words.length}</div>
+      <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <p className="text-xs text-slate-400 mb-2">Điền đáp án đúng</p>
+        <p className="text-lg font-bold text-primary">{prompt}</p>
+      </div>
+
+      <input
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        placeholder="Nhập đáp án..."
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary/40"
+      />
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            const ok = value.trim().toLowerCase() === answer;
+            setCorrect(ok);
+            setChecked(true);
+          }}
+          className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold"
+        >
+          Kiểm tra
+        </button>
+        <button
+          onClick={() => {
+            const next = (index + 1) % words.length;
+            setIndex(next);
+            setValue('');
+            setChecked(false);
+          }}
+          className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
+        >
+          Câu tiếp
+        </button>
+      </div>
+
+      {checked && (
+        <div className={`rounded-xl px-3 py-2 text-sm font-semibold ${correct ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {correct ? 'Chính xác' : `Chưa đúng. Đáp án: ${englishToVietnamese ? item.definition : item.word}`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ListeningMode({ words }: { words: VocabularyModel[] }) {
+  const audioWords = useMemo(() => words.filter(w => !!w.audio_url), [words]);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const item = audioWords[index];
+
+  const options = useMemo(() => {
+    if (!item) return [] as string[];
+    const others = shuffle(words.filter(w => w.id !== item.id).map(w => w.word)).slice(0, 3);
+    return shuffle([item.word, ...others]);
+  }, [item, words]);
+
+  if (!item) {
+    return <div className="p-4 text-sm text-slate-500">Không có từ có audio trong bộ lọc hiện tại.</div>;
+  }
+
+  return (
+    <div className="p-4 pb-6 space-y-4">
+      <div className="text-xs font-semibold text-slate-500">{index + 1} / {audioWords.length}</div>
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 text-center">
+        <button
+          onClick={() => {
+            const audio = new Audio(item.audio_url);
+            setPlaying(true);
+            audio.play().catch(() => setPlaying(false));
+            audio.onended = () => setPlaying(false);
+            audio.onerror = () => setPlaying(false);
+          }}
+          className="mx-auto w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center"
+        >
+          <Volume2 className="w-6 h-6" />
+        </button>
+        <p className="text-xs text-slate-400 mt-2">{playing ? 'Đang phát...' : 'Bấm để nghe'}</p>
+      </div>
+
+      <div className="space-y-2">
+        {options.map(opt => {
+          const isCorrect = opt === item.word;
+          const chosen = selected === opt;
+          return (
+            <button
+              key={opt}
+              onClick={() => setSelected(opt)}
+              className={`w-full rounded-xl border p-3 text-left text-sm ${
+                selected == null
+                  ? 'bg-white border-slate-200'
+                  : isCorrect
+                    ? 'bg-green-50 border-green-300 text-green-700'
+                    : chosen
+                      ? 'bg-red-50 border-red-300 text-red-700'
+                      : 'bg-white border-slate-200 opacity-60'
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+
       <button
-        onClick={() => setFlipped(!flipped)}
-        className="w-full max-w-md flex-1 mb-6"
+        onClick={() => {
+          setIndex((index + 1) % audioWords.length);
+          setSelected(null);
+        }}
+        className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold"
       >
-        {!flipped ? (
-          <div className="bg-white rounded-3xl shadow-lg p-6 sm:p-8 flex flex-col items-center justify-center min-h-75">
-            {word.word_class && (
-              <span className="px-4 py-1 bg-teal-100 text-primary text-xs font-semibold rounded-full mb-5">{word.word_class}</span>
-            )}
-            <p className="text-4xl font-bold text-primary">{word.word}</p>
-            {word.phonetic && <p className="text-base italic text-slate-400 mt-2">{word.phonetic}</p>}
-            <p className="text-xs text-slate-400 mt-8 flex items-center gap-1">
-              <span>👆</span> Nhấn để xem nghĩa
-            </p>
-          </div>
-        ) : (
-          <div className="bg-primary rounded-3xl shadow-lg p-6 sm:p-8 flex flex-col items-center justify-center min-h-75">
-            <p className="text-2xl font-bold text-white/80">{word.word}</p>
-            <div className="w-16 h-px bg-white/25 my-6" />
-            <p className="text-2xl font-semibold text-white text-center leading-relaxed">{word.definition}</p>
-            {word.word_class && (
-              <span className="px-4 py-1 bg-white/20 text-white text-xs font-semibold rounded-full mt-4">{word.word_class}</span>
-            )}
-          </div>
-        )}
+        Câu tiếp
       </button>
-
-      {/* Nav */}
-      <div className="flex gap-3 w-full max-w-md">
-        <button
-          onClick={() => { setIndex(Math.max(0, index - 1)); setFlipped(false); }}
-          disabled={index === 0}
-          className="flex-1 py-3 border-2 border-primary text-primary rounded-xl font-semibold disabled:opacity-40 flex items-center justify-center gap-1"
-        >
-          <ChevronLeft className="w-4 h-4" /> Trước
-        </button>
-        <button
-          onClick={() => { setIndex(Math.min(words.length - 1, index + 1)); setFlipped(false); }}
-          disabled={index === words.length - 1}
-          className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold disabled:opacity-40 flex items-center justify-center gap-1"
-        >
-          Tiếp <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
     </div>
   );
 }
 
-// ── Quiz shared: option tile ────────────────────────────────────
-
-function OptionTile({ label, isAnswered, isCorrect, isSelected, onTap }: {
-  label: string; isAnswered: boolean; isCorrect: boolean; isSelected: boolean; onTap: () => void;
-}) {
-  let bg = 'bg-white';
-  let border = 'border-slate-200';
-  if (isAnswered && isCorrect) { bg = 'bg-green-50'; border = 'border-green-500'; }
-  else if (isAnswered && isSelected) { bg = 'bg-red-50'; border = 'border-red-500'; }
-
-  return (
-    <button onClick={onTap} className={`w-full px-4 py-3.5 rounded-xl border ${bg} ${border} flex items-center justify-between gap-3 text-left shadow-sm transition-all`}>
-      <span className="text-sm font-medium text-primary wrap-break-word min-w-0">{label}</span>
-      {isAnswered && isCorrect && <CheckCircle className="w-5 h-5 text-green-500" />}
-      {isAnswered && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500" />}
-    </button>
-  );
-}
-
-// ── Mode 2: Definition Quiz (definition → pick word) ────────────
-
-function DefinitionQuizMode({ words }: { words: VocabularyModel[] }) {
+function SpellingMode({ words, englishToVietnamese }: { words: VocabularyModel[]; englishToVietnamese: boolean }) {
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [correct, setCorrect] = useState(0);
-  const [showResult, setShowResult] = useState(false);
+  const [value, setValue] = useState('');
+  const [checked, setChecked] = useState(false);
 
-  const options = useMemo(() => {
-    const correctWord = words[index].word;
-    const others = shuffle(words.filter(w => w.word !== correctWord).map(w => w.word)).slice(0, 3);
-    return shuffle([correctWord, ...others]);
-  }, [words, index]);
+  const item = words[index];
+  const target = ((englishToVietnamese ? item?.word : item?.definition) || '').trim();
+  const shuffled = useMemo(() => shuffle(target.split('')).join(' '), [target]);
+  if (!item) return null;
+  const ok = value.trim().toLowerCase() === target.toLowerCase();
 
-  const pick = useCallback((i: number) => {
-    if (selected !== null) return;
-    setSelected(i);
-    if (options[i] === words[index].word) setCorrect(c => c + 1);
-  }, [selected, options, words, index]);
-
-  const next = () => {
-    if (index < words.length - 1) {
-      setIndex(i => i + 1);
-      setSelected(null);
-    } else {
-      setShowResult(true);
-    }
-  };
-
-  const retry = () => { setIndex(0); setSelected(null); setCorrect(0); setShowResult(false); };
-
-  if (showResult) return <QuizResult correct={correct} total={words.length} onRetry={retry} />;
-
-  const word = words[index];
   return (
-    <div className="p-4 sm:p-6 flex flex-col min-h-125">
-      <QuizProgress index={index} total={words.length} correct={correct} />
-      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm text-center my-4">
-        <p className="text-xs text-slate-400 mb-3">Từ nào có nghĩa là?</p>
-        <p className="text-xl font-semibold text-primary leading-relaxed wrap-break-word">{word.definition}</p>
-        {word.word_class && <span className="inline-block mt-2 px-3 py-0.5 bg-teal-100 text-primary text-[11px] font-semibold rounded-lg">{word.word_class}</span>}
+    <div className="p-4 pb-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <p className="text-xs text-slate-400 mb-2">Sắp xếp chữ</p>
+        <p className="text-sm font-semibold text-slate-600 mb-3">{englishToVietnamese ? item.definition : item.word}</p>
+        <p className="text-lg font-bold text-primary tracking-[0.18em]">{shuffled}</p>
       </div>
-      <div className="space-y-2.5 flex-1">
-        {options.map((opt, i) => (
-          <OptionTile key={`${index}-${i}`} label={opt} isAnswered={selected !== null} isCorrect={opt === word.word} isSelected={selected === i} onTap={() => pick(i)} />
-        ))}
-      </div>
-      {selected !== null && (
-        <button onClick={next} className="mt-4 w-full py-3 bg-primary text-white rounded-xl font-bold">
-          {index < words.length - 1 ? 'Tiếp theo →' : 'Xem kết quả'}
+      <input
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        placeholder="Nhập đáp án"
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary/40"
+      />
+      <div className="flex gap-2">
+        <button onClick={() => setChecked(true)} className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold">Kiểm tra</button>
+        <button
+          onClick={() => {
+            setIndex((index + 1) % words.length);
+            setValue('');
+            setChecked(false);
+          }}
+          className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
+        >
+          Từ tiếp
         </button>
+      </div>
+      {checked && (
+        <div className={`rounded-xl px-3 py-2 text-sm font-semibold ${ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {ok ? 'Chính xác' : `Đáp án: ${target}`}
+        </div>
       )}
     </div>
   );
 }
 
-// ── Mode 3: Word Choice (word → pick definition) ────────────────
-
-function WordChoiceMode({ words }: { words: VocabularyModel[] }) {
+function SpeedMode({ words, englishToVietnamese }: { words: VocabularyModel[]; englishToVietnamese: boolean }) {
+  const [seconds, setSeconds] = useState(60);
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [correct, setCorrect] = useState(0);
-  const [showResult, setShowResult] = useState(false);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
 
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(t);
+          setDone(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const item = words[index % words.length];
   const options = useMemo(() => {
-    const correctDef = words[index].definition;
-    const others = shuffle(words.filter(w => w.definition !== correctDef).map(w => w.definition)).slice(0, 3);
-    return shuffle([correctDef, ...others]);
-  }, [words, index]);
-
-  const pick = useCallback((i: number) => {
-    if (selected !== null) return;
-    setSelected(i);
-    if (options[i] === words[index].definition) setCorrect(c => c + 1);
-  }, [selected, options, words, index]);
-
-  const next = () => {
-    if (index < words.length - 1) {
-      setIndex(i => i + 1);
-      setSelected(null);
-    } else {
-      setShowResult(true);
+    if (!item) return [] as string[];
+    if (englishToVietnamese) {
+      const others = shuffle(words.filter(w => w.id !== item.id).map(w => w.definition)).slice(0, 3);
+      return shuffle([item.definition, ...others]);
     }
-  };
+    const others = shuffle(words.filter(w => w.id !== item.id).map(w => w.word)).slice(0, 3);
+    return shuffle([item.word, ...others]);
+  }, [item, words, englishToVietnamese]);
 
-  const retry = () => { setIndex(0); setSelected(null); setCorrect(0); setShowResult(false); };
+  if (!item) return null;
 
-  if (showResult) return <QuizResult correct={correct} total={words.length} onRetry={retry} />;
-
-  const word = words[index];
-  return (
-    <div className="p-4 sm:p-6 flex flex-col min-h-125">
-      <QuizProgress index={index} total={words.length} correct={correct} />
-      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm text-center my-4">
-        <p className="text-xs text-slate-400 mb-3">Nghĩa của từ này là?</p>
-        <p className="text-3xl font-bold text-primary wrap-break-word">{word.word}</p>
-        {word.phonetic && <p className="text-sm italic text-slate-400 mt-1">{word.phonetic}</p>}
+  if (done) {
+    return (
+      <div className="p-6 flex flex-col items-center gap-3">
+        <p className="text-4xl font-black text-primary">{score}</p>
+        <p className="text-sm text-slate-600">Điểm của bạn trong 60 giây</p>
       </div>
-      <div className="space-y-2.5 flex-1">
-        {options.map((opt, i) => (
-          <OptionTile key={`${index}-${i}`} label={opt} isAnswered={selected !== null} isCorrect={opt === word.definition} isSelected={selected === i} onTap={() => pick(i)} />
+    );
+  }
+
+  return (
+    <div className="p-4 pb-6 space-y-4">
+      <div className="flex items-center justify-between text-sm font-semibold">
+        <span className="text-primary">{seconds}s</span>
+        <span className="text-slate-600">Điểm: {score}</span>
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-100 p-4">
+        <p className="text-sm font-bold text-primary">{englishToVietnamese ? item.word : item.definition}</p>
+      </div>
+      <div className="space-y-2">
+        {options.map(opt => (
+          <button
+            key={opt}
+            onClick={() => {
+              const isCorrect = englishToVietnamese ? opt === item.definition : opt === item.word;
+              if (isCorrect) setScore(s => s + 1);
+              setIndex(i => i + 1);
+            }}
+            className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:border-primary/40"
+          >
+            {opt}
+          </button>
         ))}
       </div>
-      {selected !== null && (
-        <button onClick={next} className="mt-4 w-full py-3 bg-primary text-white rounded-xl font-bold">
-          {index < words.length - 1 ? 'Tiếp theo →' : 'Xem kết quả'}
-        </button>
-      )}
     </div>
   );
 }
 
+function MemoryMode({ words }: { words: VocabularyModel[] }) {
+  const base = useMemo(() => shuffle(words).slice(0, Math.min(6, words.length)), [words]);
+  const cards = useMemo(() => shuffle(base.flatMap(w => ([
+    { id: `${w.id}-w`, pairId: w.id, label: w.word },
+    { id: `${w.id}-d`, pairId: w.id, label: w.definition },
+  ]))), [base]);
 
-// ── Shared quiz components ──────────────────────────────────────
+  const [opened, setOpened] = useState<string[]>([]);
+  const [matched, setMatched] = useState<Set<string>>(new Set());
 
-function QuizProgress({ index, total, correct }: { index: number; total: number; correct: number }) {
   return (
-    <div>
-      <div className="flex items-center justify-between text-sm text-slate-500 mb-2">
-        <span>{index + 1} / {total}</span>
-        <span className="flex items-center gap-1 text-primary text-xs">
-          <CheckCircle className="w-4 h-4" /> {correct} đúng
-        </span>
-      </div>
-      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${((index + 1) / total) * 100}%` }} />
-      </div>
-    </div>
-  );
-}
+    <div className="p-4 pb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {cards.map(card => {
+          const isOpen = opened.includes(card.id) || matched.has(card.pairId);
+          return (
+            <button
+              key={card.id}
+              onClick={() => {
+                if (isOpen || opened.length === 2) return;
+                if (opened.length === 0) {
+                  setOpened([card.id]);
+                  return;
+                }
 
-function QuizResult({ correct, total, onRetry }: { correct: number; total: number; onRetry: () => void }) {
-  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
-  return (
-    <div className="p-6 sm:p-8 flex flex-col items-center justify-center min-h-100">
-      <p className={`text-6xl font-bold mb-2 ${pct >= 70 ? 'text-primary' : 'text-red-500'}`}>{pct}%</p>
-      <p className="text-sm text-slate-600 wrap-break-word text-center">{correct} / {total} câu đúng</p>
-      <button onClick={onRetry} className="mt-6 px-8 py-3 bg-primary text-white rounded-xl font-semibold">
-        Làm lại
-      </button>
+                const first = cards.find(c => c.id === opened[0]);
+                if (!first) {
+                  setOpened([card.id]);
+                  return;
+                }
+
+                if (first.pairId === card.pairId) {
+                  setMatched(prev => new Set(prev).add(card.pairId));
+                  setOpened([]);
+                  return;
+                }
+
+                setOpened([card.id]);
+              }}
+              className={`h-24 rounded-xl border p-2 text-xs transition ${
+                isOpen ? 'bg-white border-primary/40 text-slate-700' : 'bg-primary/10 border-primary/20 text-transparent'
+              }`}
+            >
+              {isOpen ? card.label : 'Lexii'}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

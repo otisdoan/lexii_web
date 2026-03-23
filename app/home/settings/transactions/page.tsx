@@ -83,7 +83,7 @@ export default function TransactionsPage() {
         <h1 className="text-lg font-semibold text-white flex-1">Lịch sử giao dịch</h1>
       </div>
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="py-4 space-y-4">
         {/* Summary card */}
         {transactions.length > 0 && (
           <div className="bg-linear-to-r from-primary to-teal-500 rounded-2xl p-4 text-white">

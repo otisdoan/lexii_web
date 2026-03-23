@@ -75,7 +75,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
     : null;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-x-hidden">
       {/* Sidebar - desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 fixed h-full z-30">
         {/* Logo */}
@@ -237,7 +237,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-64">
+      <div className="flex-1 lg:ml-64 min-w-0 overflow-x-hidden">
         {/* Top header - web specific */}
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-100">
           <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
@@ -315,7 +315,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        <main className="max-w-6xl mx-auto w-full max-w-full px-4 sm:px-6 py-6 overflow-x-hidden">
           {children}
         </main>
 
