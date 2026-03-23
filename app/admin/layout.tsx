@@ -93,7 +93,7 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-6 py-6 border-b border-white/10">
+      <Link href="/admin" className="block px-6 py-6 border-b border-white/10 hover:opacity-90 transition-opacity">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -111,7 +111,7 @@ function SidebarContent({ pathname, user, onClose, onSignOut }: SidebarProps) {
             <p className="text-teal-200 text-xs mt-0.5 font-medium">Admin Panel</p>
           </div>
         </div>
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 flex flex-col overflow-y-auto">

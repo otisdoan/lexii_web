@@ -85,7 +85,7 @@ export default function TestHistoryPage() {
         </button>
       </div>
 
-      <div className="px-4 py-4 space-y-3">
+      <div className="py-4 space-y-3">
         {loading && (
           <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
             <div className="h-8 w-8 mx-auto rounded-full border-4 border-primary border-t-transparent animate-spin" />

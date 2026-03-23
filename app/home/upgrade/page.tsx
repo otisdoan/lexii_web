@@ -293,7 +293,7 @@ function UpgradePageContent() {
         </div>
       </div>
 
-      <div className="max-w-275 mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+      <div className="max-w-275 mx-auto sm:px-6 py-8 flex flex-col gap-8">
 
         {/* ── Carousel ── */}
         <div

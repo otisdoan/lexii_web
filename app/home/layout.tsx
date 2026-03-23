@@ -14,9 +14,12 @@ import {
   PenTool,
   Headphones,
   Star,
+  Menu,
+  X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
+import Footer from '@/components/footer/footer';
 
 interface UserInfo {
   name: string;
@@ -40,6 +43,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [nowTs] = useState(() => Date.now());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -75,7 +79,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       {/* Sidebar - desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 fixed h-full z-30">
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
+        <Link href="/home" className="flex items-center gap-3 px-6 py-5 border-b border-slate-100 hover:opacity-80 transition-opacity">
           <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/lexii.jpg" alt="Lexii logo" className="w-full h-full object-cover" />
@@ -84,7 +88,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             <h1 className="text-lg font-bold text-slate-900">Lexii</h1>
             <p className="text-xs text-slate-400">TOEIC® Learning</p>
           </div>
-        </div>
+        </Link>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -145,19 +149,112 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <aside className="relative flex flex-col w-72 bg-white shadow-2xl z-50">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            {/* Logo */}
+            <Link href="/home" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-6 py-5 border-b border-slate-100 hover:opacity-80 transition-opacity">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/lexii.jpg" alt="Lexii logo" className="w-full h-full object-cover" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">Lexii</h1>
+                <p className="text-xs text-slate-400">TOEIC® Learning</p>
+              </div>
+            </Link>
+
+            {/* Nav */}
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href ||
+                  (item.href !== '/home' && pathname.startsWith(item.href));
+                const isPracticeActive = item.href === '/home' && (pathname === '/home' || pathname.startsWith('/home/practice'));
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                      isActive || isPracticeActive
+                        ? 'bg-teal-50 text-primary'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Bottom */}
+            <div className="p-4 border-t border-slate-100">
+              {isPremium ? (
+                <div className="bg-linear-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 text-white">
+                  <p className="font-semibold text-sm mb-1">Gói của bạn đang hoạt động</p>
+                  <p className="text-xs text-emerald-100 mb-3">
+                    {isLifetime
+                      ? 'Gói trọn đời đang hiệu lực'
+                      : remainingDays !== null
+                        ? `Còn ${remainingDays} ngày (${premiumExpiryLabel})`
+                        : 'Đang cập nhật thời hạn gói'}
+                  </p>
+                  <Link
+                    href="/home/settings/profile"
+                    onClick={() => setSidebarOpen(false)}
+                    className="block text-center py-2 bg-white text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-50 transition-colors"
+                  >
+                    Xem chi tiết gói
+                  </Link>
+                </div>
+              ) : (
+                <div className="bg-linear-to-r from-primary to-teal-500 rounded-2xl p-4 text-white">
+                  <p className="font-semibold text-sm mb-1">Nâng cấp gói</p>
+                  <p className="text-xs text-teal-100 mb-3">Truy cập toàn bộ nội dung</p>
+                  <Link
+                    href="/home/upgrade"
+                    onClick={() => setSidebarOpen(false)}
+                    className="block text-center py-2 bg-white text-primary rounded-lg text-sm font-semibold hover:bg-teal-50 transition-colors"
+                  >
+                    Nâng cấp ngay
+                  </Link>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex-1 lg:ml-64">
         {/* Top header - web specific */}
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-100">
           <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
             {/* Mobile logo */}
-            <div className="flex items-center gap-3 lg:hidden">
+            <Link href="/home" className="flex items-center gap-3 lg:hidden">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 -ml-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-600"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
               <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/lexii.jpg" alt="Lexii logo" className="w-full h-full object-cover" />
               </div>
               <span className="font-bold text-slate-900">Lexii</span>
-            </div>
+            </Link>
 
             {/* Greeting - desktop */}
             <div className="hidden lg:block">
@@ -221,32 +318,10 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           {children}
         </main>
+
+        {/* Footer */}
+        {!pathname.match(/^\/home\/(exam|practice)(\/|$)/) && <Footer />}
       </div>
-
-      {/* Bottom nav - mobile */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-30 safe-area-bottom">
-        <div className="flex items-center justify-around py-2">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href ||
-              (item.href !== '/home' && pathname.startsWith(item.href));
-            const isPracticeActive = item.href === '/home' && (pathname === '/home' || pathname.startsWith('/home/practice'));
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1 ${
-                  isActive || isPracticeActive ? 'text-primary' : 'text-slate-400'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
     </div>
   );
 }

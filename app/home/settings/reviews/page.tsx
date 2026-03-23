@@ -430,7 +430,7 @@ export default function ReviewsPage() {
       </div>
 
       {/* Tab switcher */}
-      <div className="px-4 pt-4">
+      <div className="pt-4">
         <div className="bg-white rounded-2xl p-1 shadow-sm flex">
           <button
             onClick={() => setTab('browse')}
@@ -467,7 +467,7 @@ export default function ReviewsPage() {
           <p className="text-slate-400 text-sm mt-3">Đang tải đánh giá...</p>
         </div>
       ) : tab === 'browse' ? (
-        <div className="px-4 pt-4 space-y-4">
+        <div className="pt-4 space-y-4">
           {/* Stats overview */}
           <div className="bg-linear-to-br from-teal-600 to-teal-500 rounded-2xl p-5 shadow-lg shadow-teal-200">
             <div className="flex items-center gap-4">

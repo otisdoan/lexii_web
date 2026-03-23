@@ -118,7 +118,7 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold text-white text-center">Cài đặt</h1>
       </div>
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="py-4 space-y-4">
         {/* Profile section */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="mb-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
