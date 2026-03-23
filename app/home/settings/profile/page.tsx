@@ -161,7 +161,7 @@ export default function ProfilePage() {
         <h1 className="text-lg font-semibold text-white flex-1 text-center pr-10">Hồ sơ của tôi</h1>
       </div>
 
-      <div className="px-4 py-6 space-y-5">
+      <div className="py-6 space-y-5">
         {/* Avatar section */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative">
