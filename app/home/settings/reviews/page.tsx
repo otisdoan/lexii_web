@@ -588,7 +588,7 @@ export default function ReviewsPage() {
           )}
         </div>
       ) : (
-        <div className="px-4 pt-4 space-y-4">
+        <div className="pt-4 space-y-4">
           {submitted ? (
             <div className="bg-white rounded-2xl p-10 text-center shadow-sm animate-fade-in">
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
