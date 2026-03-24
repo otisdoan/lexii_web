@@ -246,3 +246,148 @@ export interface NotificationItem {
   isRead: boolean;
   createdAt: string;
 }
+
+// ========== Roadmap Template (Admin) ==========
+export interface RoadmapTemplate {
+  id: string;
+  title: string;
+  start_score: number;
+  target_score: number;
+  default_duration_days: number;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplateTask {
+  id: string;
+  template_id: string;
+  sequence_order: number;
+  task_type: RoadmapTaskType;
+  is_standalone: boolean;
+  reference_id: string | null;
+  title: string;
+  description: string | null;
+  estimated_minutes: number;
+}
+
+export type RoadmapTaskType =
+  | 'vocabulary'
+  | 'grammar'
+  | 'listening'
+  | 'reading'
+  | 'speaking'
+  | 'writing'
+  | 'practice'
+  | 'mini_test'
+  | 'review'
+  | 'full_test';
+
+// ========== User Roadmap ==========
+export interface UserRoadmap {
+  id: string;
+  user_id: string;
+  template_id: string;
+  current_score: number;
+  target_score: number;
+  duration_days: number;
+  start_date: string;
+  end_date: string | null;
+  status: RoadmapStatus;
+  progress_percent: number;
+  paused_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RoadmapStatus = 'active' | 'completed' | 'abandoned' | 'paused';
+
+export interface UserDailySchedule {
+  id: string;
+  roadmap_id: string;
+  actual_day_number: number;
+  study_date: string | null;
+  total_estimated_minutes: number;
+  is_completed: boolean;
+  completed_at: string | null;
+  tasks?: UserTask[];
+}
+
+export interface UserTask {
+  id: string;
+  daily_schedule_id: string;
+  template_task_id: string | null;
+  task_type: RoadmapTaskType;
+  is_standalone: boolean;
+  reference_id: string | null;
+  title: string;
+  description: string | null;
+  estimated_minutes: number;
+  is_completed: boolean;
+  completed_at: string | null;
+  order_index: number;
+}
+
+// ========== Assessment ==========
+export type AssessmentMethod =
+  | 'exam_history'
+  | 'practice_estimate'
+  | 'self_assessed'
+  | 'placement_test';
+
+export interface AssessmentResult {
+  method: AssessmentMethod;
+  current_score: number;
+  confidence: 'high' | 'medium' | 'low';
+  details: {
+    source: string;
+    exam_count?: number;
+    avg_score?: number;
+    latest_score?: number;
+    correct_rate?: number;
+    date_range?: string;
+  };
+}
+
+// ========== Roadmap Creation ==========
+export interface CreateRoadmapRequest {
+  target_score: number;
+  duration_days: number;
+  current_score: number;
+  assessment_method: AssessmentMethod;
+}
+
+export interface CreateRoadmapResponse {
+  success: boolean;
+  roadmap: UserRoadmap;
+  warning: RoadmapWarning | null;
+  today_schedule: UserDailySchedule;
+}
+
+export interface RoadmapWarning {
+  type: 'unrealistic_schedule' | 'score_already_achieved';
+  message: string;
+  suggestion: string;
+  recommended_days?: number;
+}
+
+export interface RoadmapMilestone {
+  day: number;
+  label: string;
+  target_score: number;
+  is_reached: boolean;
+}
+
+// ========== Progress ==========
+export interface RoadmapProgress {
+  roadmap_id: string;
+  total_days: number;
+  completed_days: number;
+  total_tasks: number;
+  completed_tasks: number;
+  current_day: number;
+  progress_percent: number;
+  streak_days: number;
+  milestones: RoadmapMilestone[];
+}
