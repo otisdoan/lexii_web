@@ -116,14 +116,23 @@ export async function assessUserLevel(
 
 // ========== Template Matching ==========
 
-/** Tìm tất cả templates user cần học qua */
+/**
+ * Tìm tất cả templates mà user cần học qua (Range Overlap).
+ * Lấy template nếu khoảng [start_score, target_score) của nó GIAO với
+ * khoảng [currentScore, targetScore) của user.
+ * VD: User 3→750 sẽ lấy Stage 1 (0→350), Stage 2 (350→550), Stage 3 (550→750).
+ */
 export function findMatchingTemplates(
   templates: RoadmapTemplate[],
   currentScore: number,
   targetScore: number,
 ): RoadmapTemplate[] {
   return templates
-    .filter((t) => t.target_score > currentScore && t.start_score < targetScore)
+    .filter((t) => {
+      // Range overlap: template phải giao với khoảng [currentScore, targetScore)
+      // Tức là: template.target > currentScore  VÀ  template.start < targetScore
+      return t.target_score > currentScore && t.start_score < targetScore;
+    })
     .sort((a, b) => a.start_score - b.start_score);
 }
 
@@ -136,27 +145,34 @@ export interface ScheduleDayPlan {
   tasks: TemplateTask[];
 }
 
-/** 2-Step Dynamic Allocation: phân bổ tasks vào ngày học dựa trên sequence_order + is_standalone */
+/**
+ * 2-Step Dynamic Allocation: phân bổ TẤT CẢ tasks vào ngày học.
+ * KHÔNG BAO GIỜ bỏ rơi task nào — vòng lặp chạy đến khi hết queue.
+ * Pace được tính từ (normalTasks / normalDayBudget).
+ */
 export function generateUserSchedule(
   allTemplateTasks: TemplateTask[],
   _totalStandardDays: number,
   userDays: number,
   startDate: Date,
 ): ScheduleDayPlan[] {
-  // Sort tasks by sequence_order (should already be sorted, but ensure)
+  // Sort tasks by sequence_order
   const sorted = [...allTemplateTasks].sort(
     (a, b) => a.sequence_order - b.sequence_order,
   );
+
+  if (sorted.length === 0) return [];
 
   // === Bước 1: Tính quỹ ngày cho normal tasks ===
   const standaloneCount = sorted.filter((t) => t.is_standalone).length;
   const normalCount = sorted.length - standaloneCount;
   const normalDayBudget = Math.max(1, userDays - standaloneCount);
 
-  // Pace = số normal tasks trung bình mỗi ngày
+  // Pace = số normal tasks trung bình mỗi ngày (có thể > 10 nếu lộ trình ngắn)
   const pace = normalCount > 0 ? normalCount / normalDayBudget : 1;
+  const tasksPerDay = Math.max(1, Math.ceil(pace));
 
-  // === Bước 2: Duyệt và phân bổ ===
+  // === Bước 2: Duyệt toàn bộ queue, KHÔNG dừng giữa chừng ===
   const schedules: ScheduleDayPlan[] = [];
   let currentDayNumber = 1;
   let currentDayTasks: TemplateTask[] = [];
@@ -181,7 +197,11 @@ export function generateUserSchedule(
     normalTasksInCurrentDay = 0;
   }
 
-  for (const task of sorted) {
+  // Iterate through every task in the queue — no truncation
+  let taskIndex = 0;
+  while (taskIndex < sorted.length) {
+    const task = sorted[taskIndex];
+
     if (task.is_standalone) {
       // Đóng ngày hiện tại nếu đang có tasks
       flushCurrentDay();
@@ -192,13 +212,15 @@ export function generateUserSchedule(
       currentDayTasks.push(task);
       normalTasksInCurrentDay++;
       // Nếu đã đủ pace cho ngày này → đóng ngày
-      if (normalTasksInCurrentDay >= Math.ceil(pace)) {
+      if (normalTasksInCurrentDay >= tasksPerDay) {
         flushCurrentDay();
       }
     }
+
+    taskIndex++;
   }
 
-  // Flush remaining tasks
+  // Flush any remaining tasks in the buffer
   flushCurrentDay();
 
   return schedules;
@@ -207,31 +229,51 @@ export function generateUserSchedule(
 // ========== Feasibility Check ==========
 
 const MAX_DAILY_MINUTES = 180; // 3 giờ/ngày
+const MAX_TASKS_PER_DAY = 15; // Ngưỡng cảnh báo overload
+const HEAVY_DAILY_MINUTES = 240; // 4 giờ/ngày = "cực kỳ nặng"
 
 /** Kiểm tra xem lộ trình có khả thi không */
 export function checkFeasibility(
   schedules: ScheduleDayPlan[],
-  totalStandardDays: number,
+  _totalStandardDays: number,
 ): RoadmapWarning | null {
   if (schedules.length === 0) return null;
 
+  const totalTasks = schedules.reduce((sum, s) => sum + s.tasks.length, 0);
+  const totalMinutes = schedules.reduce(
+    (sum, s) => sum + s.total_estimated_minutes,
+    0,
+  );
   const maxDay = schedules.reduce((max, s) =>
     s.total_estimated_minutes > max.total_estimated_minutes ? s : max,
   );
+  const maxTaskCount = Math.max(...schedules.map((s) => s.tasks.length));
+  const avgMinutesPerDay = totalMinutes / schedules.length;
 
-  if (maxDay.total_estimated_minutes > MAX_DAILY_MINUTES) {
-    const avgMinutesPerStdDay =
-      schedules.reduce((sum, s) => sum + s.total_estimated_minutes, 0) /
-      schedules.length;
+  // Tính recommended_days để trung bình ~MAX_DAILY_MINUTES mỗi ngày
+  const recommendedDays = Math.ceil(totalMinutes / MAX_DAILY_MINUTES);
 
-    const recommendedDays = Math.ceil(
-      (totalStandardDays * avgMinutesPerStdDay) / MAX_DAILY_MINUTES,
-    );
-
+  // Cực kỳ nặng: > 4h/ngày hoặc > 15 tasks/ngày
+  if (
+    maxDay.total_estimated_minutes >= HEAVY_DAILY_MINUTES ||
+    maxTaskCount > MAX_TASKS_PER_DAY
+  ) {
+    const maxHours = Math.round(maxDay.total_estimated_minutes / 60);
     return {
       type: "unrealistic_schedule",
-      message: `Lộ trình này yêu cầu học tối đa ${Math.round(maxDay.total_estimated_minutes / 60)} tiếng/ngày.`,
-      suggestion: `Hãy chọn thời gian dài hơn để đạt hiệu quả tốt nhất!`,
+      message: `Lộ trình cực kỳ nặng: tối đa ${maxTaskCount} bài/ngày (~${maxHours} tiếng). Tổng ${totalTasks} bài.`,
+      suggestion: `Hãy kéo dài thời gian để đạt hiệu quả tốt nhất!`,
+      recommended_days: Math.max(recommendedDays, schedules.length + 14),
+    };
+  }
+
+  // Nặng vừa: > 3h/ngày
+  if (maxDay.total_estimated_minutes > MAX_DAILY_MINUTES) {
+    const avgHours = Math.round(avgMinutesPerDay / 60 * 10) / 10;
+    return {
+      type: "unrealistic_schedule",
+      message: `Lộ trình này yêu cầu trung bình ~${avgHours} tiếng/ngày. Tổng ${totalTasks} bài.`,
+      suggestion: `Hãy chọn thời gian dài hơn để học hiệu quả hơn!`,
       recommended_days: Math.max(recommendedDays, schedules.length + 7),
     };
   }

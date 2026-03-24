@@ -15,6 +15,7 @@ import {
   Info,
 } from "lucide-react";
 import type { AssessmentResult, RoadmapWarning } from "@/lib/types";
+import { RoadmapCertificationButton } from "@/components/roadmap/RoadmapCertificationModal";
 
 const SCORE_TARGETS = [
   {
@@ -361,6 +362,10 @@ function CreateRoadmapContent() {
                   )}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-4 text-center">
+              <RoadmapCertificationButton variant="subtle" />
             </div>
           </div>
         )}

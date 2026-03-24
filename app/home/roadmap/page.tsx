@@ -23,6 +23,7 @@ import type {
   UserTask,
   RoadmapProgress,
 } from "@/lib/types";
+import { RoadmapCertificationButton } from "@/components/roadmap/RoadmapCertificationModal";
 
 const TASK_TYPE_ICONS: Record<
   string,
@@ -155,13 +156,16 @@ export default function RoadmapPage() {
           ngày phù hợp với mục tiêu và thời gian cam kết.
         </p>
 
-        <Link
-          href="/home/roadmap/create"
-          className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-2xl font-semibold text-lg hover:shadow-lg hover:shadow-teal-200 transition-all hover:-translate-y-0.5"
-        >
-          <Plus className="w-5 h-5" />
-          Tạo lộ trình
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/home/roadmap/create"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-2xl font-semibold text-lg hover:shadow-lg hover:shadow-teal-200 transition-all hover:-translate-y-0.5"
+          >
+            <Plus className="w-5 h-5" />
+            Tạo lộ trình
+          </Link>
+          <RoadmapCertificationButton variant="prominent" />
+        </div>
 
         <div className="grid grid-cols-3 gap-4 mt-12">
           {[
@@ -267,7 +271,8 @@ export default function RoadmapPage() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <RoadmapCertificationButton variant="prominent" />
         <Link
           href={fullScheduleLink}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-100 rounded-xl hover:bg-teal-100 hover:-translate-y-0.5 transition-all"
