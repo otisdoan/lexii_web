@@ -46,6 +46,7 @@ export default function RoadmapPage() {
   const [progress, setProgress] = useState<RoadmapProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -428,11 +429,7 @@ export default function RoadmapPage() {
               <Pause className="w-4 h-4" /> Tạm dừng
             </button>
             <button
-              onClick={() => {
-                if (confirm("Bạn có chắc muốn hủy lộ trình này không?")) {
-                  handleAction("abandoned");
-                }
-              }}
+              onClick={() => setShowCancelConfirm(true)}
               disabled={actionLoading}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 rounded-xl font-medium text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
             >
@@ -450,6 +447,41 @@ export default function RoadmapPage() {
           </button>
         )}
       </div>
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-50 mx-auto mb-4">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-red-600 text-center">
+              Hủy lộ trình?
+            </h3>
+            <p className="text-sm text-slate-600 text-center mt-2">
+              Toàn bộ tiến độ học tập của chặng 0-350 sẽ bị xóa bỏ và không thể
+              khôi phục.
+            </p>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
+              >
+                Giữ lại học tiếp
+              </button>
+              <button
+                onClick={async () => {
+                  setShowCancelConfirm(false);
+                  await handleAction("abandoned");
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700"
+              >
+                Hủy lộ trình
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

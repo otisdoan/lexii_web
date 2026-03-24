@@ -51,6 +51,10 @@ export async function GET() {
       roadmap = pausedRoadmap;
     }
 
+    if (!roadmap) {
+      return NextResponse.json({ error: "No active roadmap" }, { status: 404 });
+    }
+
     const progress = await getRoadmapProgress(roadmap.id, supabase);
     return NextResponse.json(progress);
   } catch (err) {

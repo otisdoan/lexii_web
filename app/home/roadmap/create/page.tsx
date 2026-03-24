@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Target,
   TrendingUp,
@@ -75,8 +75,9 @@ const STEPS = [
 
 type LinePoint = { date: string; value: number };
 
-export default function CreateRoadmapPage() {
+function CreateRoadmapContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
 
   // Step 1
@@ -90,6 +91,8 @@ export default function CreateRoadmapPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [attemptSeries, setAttemptSeries] = useState<LinePoint[]>([]);
   const [practiceSeries, setPracticeSeries] = useState<LinePoint[]>([]);
+  const [placementLoading, setPlacementLoading] = useState(false);
+  const [placementError, setPlacementError] = useState<string | null>(null);
 
   // Step 3
   const [durationDays, setDurationDays] = useState<number | null>(null);
@@ -107,8 +110,19 @@ export default function CreateRoadmapPage() {
   const actualDuration =
     durationDays || (customDays ? parseInt(customDays) : 0);
 
+  const placementButtonLabel =
+    (assessment?.current_score ?? 0) === 0
+      ? "Làm bài Test đầu vào"
+      : "Thi lại để cập nhật trình độ";
+
   // Auto-assess when reaching step 2
   useEffect(() => {
+    if (step === 0) {
+      const requestedStep = Number(searchParams.get("step") || "0");
+      if (requestedStep > 0) {
+        setStep(Math.min(requestedStep, 3));
+      }
+    }
     if (step === 1) {
       if (!assessment && !assessLoading) {
         loadAssessment();
@@ -118,6 +132,44 @@ export default function CreateRoadmapPage() {
       }
     }
   }, [step]);
+
+  async function startPlacementTest() {
+    setPlacementError(null);
+    setPlacementLoading(true);
+    try {
+      const res = await fetch("/api/roadmap/placement-test");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || "Không thể lấy đề thi");
+      }
+      const data = (await res.json()) as {
+        test: {
+          id: string;
+          title: string;
+          duration: number;
+          total_questions: number;
+          is_premium: boolean;
+        };
+      };
+      const test = data.test;
+      const params = new URLSearchParams({
+        testId: test.id,
+        title: test.title,
+        duration: String(test.duration ?? 120),
+        total: String(test.total_questions ?? 200),
+        isPremium: test.is_premium ? "1" : "0",
+        mode: "placement",
+        returnTo: "/home/roadmap/create?step=1",
+      });
+      router.push(`/home/exam/test-start?${params.toString()}`);
+    } catch (err) {
+      setPlacementError(
+        err instanceof Error ? err.message : "Không thể bắt đầu bài thi",
+      );
+    } finally {
+      setPlacementLoading(false);
+    }
+  }
 
   async function loadAssessment() {
     setAssessLoading(true);
@@ -157,7 +209,10 @@ export default function CreateRoadmapPage() {
   }
 
   async function handleCreate() {
-    if (!targetScore || !actualDuration) return;
+    if (!targetScore || !actualDuration) {
+      setError("Vui lòng chọn mục tiêu và thời gian trước khi tạo lộ trình.");
+      return;
+    }
     setCreating(true);
     setError(null);
     setWarning(null);
@@ -447,6 +502,26 @@ export default function CreateRoadmapPage() {
                 </div>
               )}
             </div>
+
+            <div className="mt-6">
+              <button
+                onClick={startPlacementTest}
+                disabled={placementLoading}
+                className="w-full py-3 bg-teal-500 text-white rounded-xl font-semibold text-sm hover:bg-teal-600 transition-colors disabled:opacity-50"
+              >
+                {placementLoading
+                  ? "Đang chuẩn bị đề..."
+                  : placementButtonLabel}
+              </button>
+              {placementError && (
+                <p className="text-xs text-red-500 mt-2">{placementError}</p>
+              )}
+              {(assessment?.current_score ?? 0) > 0 && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Nếu thấy điểm chưa đúng, hãy làm bài test mới để cập nhật.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -631,6 +706,20 @@ export default function CreateRoadmapPage() {
   );
 }
 
+export default function CreateRoadmapPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      }
+    >
+      <CreateRoadmapContent />
+    </Suspense>
+  );
+}
+
 function LineChartCard({
   title,
   subtitle,
@@ -745,13 +834,7 @@ function LineChartCard({
         aria-label={title}
       >
         <defs>
-          <linearGradient
-            id={`grad_${chartId}`}
-            x1="0"
-            y1="0"
-            x2="0"
-            y2="1"
-          >
+          <linearGradient id={`grad_${chartId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.25" />
             <stop offset="100%" stopColor={color} stopOpacity="0.02" />
           </linearGradient>
@@ -797,7 +880,14 @@ function LineChartCard({
         {/* Dots */}
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="3" fill="white" stroke={color} strokeWidth="1.5" />
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r="3"
+              fill="white"
+              stroke={color}
+              strokeWidth="1.5"
+            />
             {i === points.length - 1 && (
               <circle cx={p.x} cy={p.y} r="5" fill={color} opacity="0.3">
                 <animate
@@ -842,4 +932,3 @@ function LineChartCard({
     </div>
   );
 }
-
