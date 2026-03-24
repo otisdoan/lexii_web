@@ -29,8 +29,8 @@ import {
   getMiniTests,
   getUserAttemptHistory,
   getRecentPracticeHistory,
-  getVocabularyCount,
-  getGrammarCount,
+  getSavedVocabularyCount,
+  getSavedGrammarCount,
 } from '@/lib/api';
 import type { TestModel, AttemptHistoryItem, PracticeHistoryItem } from '@/lib/types';
 
@@ -118,8 +118,8 @@ export default function HomePage() {
           getFullTests(),
           getMiniTests(),
           getCurrentUserRole(),
-          getVocabularyCount(),
-          getGrammarCount(),
+          getSavedVocabularyCount(),
+          getSavedGrammarCount(),
         ]);
         setFullTests(ft);
         setMiniTests(mt);
@@ -399,7 +399,7 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Link
-              href="/home/vocabulary"
+              href="/home/vocabulary?tab=learn&saved=1"
               className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
             >
               <BookMarked className="w-8 h-8 text-primary mb-2" />
@@ -407,12 +407,12 @@ export default function HomePage() {
               <p className="text-xs text-slate-500 mt-1">{vocabCount > 0 ? `${vocabCount} từ đã lưu` : 'Chưa có từ vựng'}</p>
             </Link>
             <Link
-              href="/home/grammar"
+              href="/home/grammar?saved=1"
               className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
             >
               <HelpCircle className="w-8 h-8 text-orange-500 mb-2" />
               <h4 className="font-semibold text-slate-800 text-sm">Ngữ pháp</h4>
-              <p className="text-xs text-slate-500 mt-1">{grammarCount > 0 ? `${grammarCount} câu hỏi` : 'Chưa có ngữ pháp'}</p>
+              <p className="text-xs text-slate-500 mt-1">{grammarCount > 0 ? `${grammarCount} ngữ pháp đã lưu` : 'Chưa có ngữ pháp'}</p>
             </Link>
           </div>
         </section>

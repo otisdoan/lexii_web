@@ -6,16 +6,22 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  SlidersHorizontal,
   BookOpen,
   Lightbulb,
   Hash,
   Copy,
   CheckCircle2,
-  Loader2,
   AlignLeft,
   Sparkles,
+  Star,
 } from 'lucide-react';
-import { getGrammar, getLessonNumbers } from '@/lib/api';
+import {
+  getGrammar,
+  getLessonNumbers,
+  getSavedGrammarIds,
+  setGrammarSaved,
+} from '@/lib/api';
 import type { GrammarModel } from '@/lib/types';
 
 function FormulaBlock({ formula }: { formula: string }) {
@@ -51,7 +57,19 @@ function FormulaBlock({ formula }: { formula: string }) {
   );
 }
 
-function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: boolean; onToggle: () => void }) {
+function GrammarCard({
+  item,
+  isOpen,
+  isSaved,
+  onToggle,
+  onToggleSaved,
+}: {
+  item: GrammarModel;
+  isOpen: boolean;
+  isSaved: boolean;
+  onToggle: () => void;
+  onToggleSaved: (grammarId: string) => void;
+}) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden transition-all duration-200 hover:shadow-md">
       {/* Header */}
@@ -69,6 +87,16 @@ function GrammarCard({ item, isOpen, onToggle }: { item: GrammarModel; isOpen: b
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSaved(item.id);
+            }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 bg-slate-50 text-slate-400 hover:bg-amber-50 hover:text-amber-500"
+            title={isSaved ? 'Bỏ lưu ngữ pháp' : 'Lưu ngữ pháp'}
+          >
+            <Star className={`w-4 h-4 ${isSaved ? 'fill-amber-400 text-amber-500' : ''}`} />
+          </button>
           {item.examples && item.examples.length > 0 && (
             <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-full">
               {item.examples.length} ví dụ
@@ -136,6 +164,9 @@ export default function GrammarPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [lessonFilter, setLessonFilter] = useState<number | 'all'>('all');
+  const [savedOnlyFilter, setSavedOnlyFilter] = useState(false);
+  const [savedGrammarIds, setSavedGrammarIds] = useState<Set<string>>(new Set());
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [lessons, setLessons] = useState<number[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -143,13 +174,33 @@ export default function GrammarPage() {
   const PAGE_SIZE = 15;
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const savedQuery = params.get('saved');
+    if (savedQuery) {
+      const normalized = savedQuery.trim().toLowerCase();
+      if (normalized === '1' || normalized === 'true' || normalized === 'yes') {
+        setSavedOnlyFilter(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    async function loadSaved() {
+      try {
+        const ids = await getSavedGrammarIds();
+        setSavedGrammarIds(new Set(ids));
+      } catch {
+        setSavedGrammarIds(new Set());
+      }
+    }
+    loadSaved();
+  }, []);
+
+  useEffect(() => {
     async function init() {
       try {
         const ls = await getLessonNumbers();
         setLessons(ls);
-        if (ls.length > 0 && lessonFilter === 'all') {
-          setLessonFilter(ls[0]);
-        }
       } catch {
         //
       }
@@ -172,11 +223,16 @@ export default function GrammarPage() {
             (g.examples && g.examples.some(e => e.toLowerCase().includes(q)))
           );
         }
+        if (savedOnlyFilter) {
+          filtered = filtered.filter(g => savedGrammarIds.has(g.id));
+        }
         setTotal(filtered.length);
         setItems(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
-        if (filtered.length > 0 && expanded === null) {
-          setExpanded(filtered[0].id);
-        }
+        setExpanded(prev => {
+          if (prev !== null) return prev;
+          if (filtered.length === 0) return prev;
+          return filtered[0].id;
+        });
       } catch {
         //
       } finally {
@@ -184,7 +240,37 @@ export default function GrammarPage() {
       }
     }
     load();
-  }, [lessonFilter, search, page]);
+  }, [lessonFilter, search, page, savedOnlyFilter, savedGrammarIds]);
+
+  const toggleSavedGrammar = async (grammarId: string) => {
+    const wasSaved = savedGrammarIds.has(grammarId);
+    const nextSaved = !wasSaved;
+
+    setSavedGrammarIds(prev => {
+      const next = new Set(prev);
+      if (wasSaved) {
+        next.delete(grammarId);
+      } else {
+        next.add(grammarId);
+      }
+      return next;
+    });
+
+    try {
+      await setGrammarSaved(grammarId, nextSaved);
+    } catch {
+      setSavedGrammarIds(prev => {
+        const rollback = new Set(prev);
+        if (wasSaved) {
+          rollback.add(grammarId);
+        } else {
+          rollback.delete(grammarId);
+        }
+        return rollback;
+      });
+      window.alert('Không lưu được ngữ pháp lúc này. Vui lòng thử lại.');
+    }
+  };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -217,32 +303,91 @@ export default function GrammarPage() {
         />
       </div>
 
-      {/* Lesson Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
+      <div className="flex items-center gap-2 mb-2">
         <button
-          onClick={() => { setLessonFilter('all'); setPage(0); setExpanded(null); }}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 ${
-            lessonFilter === 'all'
-              ? 'bg-primary text-white shadow-sm'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
+          onClick={() => setShowFilterPanel(v => !v)}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-primary/30 rounded-xl text-xs font-semibold text-primary"
         >
-          Tất cả
+          <SlidersHorizontal className="w-4 h-4" />
+          Bộ lọc
         </button>
-        {lessons.map(lesson => (
-          <button
-            key={lesson}
-            onClick={() => { setLessonFilter(lesson); setPage(0); setExpanded(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 ${
-              lessonFilter === lesson
-                ? 'bg-primary text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Bài {lesson}
-          </button>
-        ))}
+        <div className="text-xs text-slate-500">
+          Bài {lessonFilter === 'all' ? 'tất cả' : lessonFilter} • {savedOnlyFilter ? 'Ngữ pháp đã lưu' : 'Mọi ngữ pháp'}
+        </div>
       </div>
+
+      {showFilterPanel && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-3 mb-5">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 mb-2">Lọc theo bài</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                onClick={() => {
+                  setLessonFilter('all');
+                  setPage(0);
+                  setExpanded(null);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0 ${
+                  lessonFilter === 'all'
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tất cả bài
+              </button>
+              {lessons.map(lesson => (
+                <button
+                  key={lesson}
+                  onClick={() => {
+                    setLessonFilter(lesson);
+                    setPage(0);
+                    setExpanded(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0 ${
+                    lessonFilter === lesson
+                      ? 'bg-primary text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Bài {lesson}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 mb-2">Danh mục</p>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  setSavedOnlyFilter(false);
+                  setPage(0);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  !savedOnlyFilter
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Mọi ngữ pháp
+              </button>
+              <button
+                onClick={() => {
+                  setSavedOnlyFilter(true);
+                  setPage(0);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  savedOnlyFilter
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Ngữ pháp đã lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grammar List */}
       {loading ? (
@@ -262,7 +407,9 @@ export default function GrammarPage() {
       ) : items.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
           <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-500">Không tìm thấy ngữ pháp nào</p>
+          <p className="text-sm text-slate-500">
+            {savedOnlyFilter ? 'Chưa có ngữ pháp đã lưu' : 'Không tìm thấy ngữ pháp nào'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -271,7 +418,9 @@ export default function GrammarPage() {
               key={g.id}
               item={g}
               isOpen={expanded === g.id}
+              isSaved={savedGrammarIds.has(g.id)}
               onToggle={() => toggle(g.id)}
+              onToggleSaved={toggleSavedGrammar}
             />
           ))}
         </div>

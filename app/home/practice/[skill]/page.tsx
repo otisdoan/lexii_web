@@ -21,6 +21,7 @@ import {
   getCurrentUserRole,
   getListeningPracticeParts,
   getReadingPracticeParts,
+  getUnansweredQuestionIdsForPracticePart,
   getSpeakingPartsCount,
   getWritingPartsCount,
 } from '@/lib/api';
@@ -74,6 +75,13 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
   const [selectedSpeakingPart, setSelectedSpeakingPart] = useState<{ partNumber: number; title: string; description: string } | null>(null);
   const [selectedWritingPart, setSelectedWritingPart] = useState<{ partNumber: number; title: string; description: string } | null>(null);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(0);
+  const [availableQuestionIds, setAvailableQuestionIds] = useState<string[] | null>(null);
+  const [showRestartChoiceModal, setShowRestartChoiceModal] = useState(false);
+  const [pendingPracticeSelection, setPendingPracticeSelection] = useState<{
+    part: PracticePartData;
+    index: number;
+  } | null>(null);
+  const [loadingUnanswered, setLoadingUnanswered] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -126,11 +134,58 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
       return;
     }
 
+    const supportsUnansweredMode =
+      (skill === 'listening' || skill === 'reading') &&
+      (part.questionType === 'mcq_audio' || part.questionType === 'mcq_text') &&
+      part.questionCount > 0 &&
+      part.answeredCount > 0;
+
+    if (!supportsUnansweredMode) {
+      openPracticeConfigModal(part, null);
+      return;
+    }
+
+    setPendingPracticeSelection({ part, index });
+    setShowRestartChoiceModal(true);
+  };
+
+  const openPracticeConfigModal = (part: PracticePartData, ids: string[] | null) => {
+    const total = ids?.length ?? part.questionCount;
     setSelectedPracticePart(part);
-    const defaultCount = part.questionCount > 0
-      ? Math.min(10, part.questionCount)
-      : 0;
+    setAvailableQuestionIds(ids);
+    const defaultCount = total > 0 ? Math.min(10, total) : 0;
     setSelectedQuestionCount(defaultCount);
+  };
+
+  const chooseRestartFromBeginning = () => {
+    if (!pendingPracticeSelection) return;
+    const { part } = pendingPracticeSelection;
+    setShowRestartChoiceModal(false);
+    setPendingPracticeSelection(null);
+    openPracticeConfigModal(part, null);
+  };
+
+  const choosePracticeUnanswered = async () => {
+    if (!pendingPracticeSelection) return;
+    const { part } = pendingPracticeSelection;
+    setLoadingUnanswered(true);
+    try {
+      const ids = await getUnansweredQuestionIdsForPracticePart(
+        part.partNumber,
+        part.questionType,
+      );
+      setShowRestartChoiceModal(false);
+      setPendingPracticeSelection(null);
+      if (!ids.length) {
+        window.alert('Bạn đã hoàn thành tất cả câu hỏi của part này.');
+        return;
+      }
+      openPracticeConfigModal(part, ids);
+    } catch {
+      window.alert('Không thể tải danh sách câu chưa làm. Vui lòng thử lại.');
+    } finally {
+      setLoadingUnanswered(false);
+    }
   };
 
   const buildCountOptions = (total: number, compact = false): number[] => {
@@ -151,7 +206,8 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
   const startPartPractice = () => {
     if (!selectedPracticePart) return;
     const partTitle = descriptions[selectedPracticePart.partNumber]?.title || `Part ${selectedPracticePart.partNumber}`;
-    const limit = selectedQuestionCount > 0 ? selectedQuestionCount : selectedPracticePart.questionCount;
+    const totalAvailable = availableQuestionIds?.length ?? selectedPracticePart.questionCount;
+    const limit = selectedQuestionCount > 0 ? selectedQuestionCount : totalAvailable;
     const params = new URLSearchParams({
       testId: selectedPracticePart.testId,
       title: partTitle,
@@ -160,6 +216,19 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
       practice: 'true',
       questionLimit: String(limit),
     });
+
+    if (availableQuestionIds && typeof window !== 'undefined') {
+      const selectedIds = availableQuestionIds.slice(0, limit);
+      window.sessionStorage.setItem(
+        'practice_unanswered_question_ids',
+        JSON.stringify(selectedIds),
+      );
+      params.set('source', 'unanswered');
+    } else if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('practice_unanswered_question_ids');
+    }
+
+    setAvailableQuestionIds(null);
     setSelectedPracticePart(null);
     router.push(`/home/exam/question?${params.toString()}`);
   };
@@ -441,6 +510,12 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedPracticePart(null)} />
           <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl">
+            {(() => {
+              const totalAvailable = availableQuestionIds?.length ?? selectedPracticePart.questionCount;
+              const availabilityLabel = availableQuestionIds ? 'câu chưa làm' : 'câu hỏi có sẵn';
+              const options = buildCountOptions(totalAvailable, true);
+              return (
+                <>
             {/* Header */}
             <div className="bg-linear-to-r from-primary to-blue-500 px-6 pt-6 pb-5 text-white">
               <div className="flex items-center justify-between mb-1">
@@ -458,7 +533,7 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
                 {descriptions[selectedPracticePart.partNumber]?.title || `Part ${selectedPracticePart.partNumber}`}
               </h4>
               <p className="text-blue-100 text-sm mt-0.5">
-                {selectedPracticePart.questionCount} câu hỏi có sẵn
+                {totalAvailable} {availabilityLabel}
               </p>
             </div>
 
@@ -467,7 +542,7 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
               <div className="flex items-center justify-between mb-3">
                 <label className="text-sm font-semibold text-slate-700">Chọn số câu muốn luyện</label>
                 <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-                  Tối đa {selectedPracticePart.questionCount} câu
+                  Tối đa {totalAvailable} câu
                 </span>
               </div>
 
@@ -484,7 +559,7 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
 
                 {/* Quick preset chips */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {buildCountOptions(selectedPracticePart.questionCount, true).map((n) => (
+                  {options.map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -495,27 +570,29 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
                           : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
                       }`}
                     >
-                      {n === selectedPracticePart.questionCount ? 'Tất cả' : `${n}`}
+                      {n === totalAvailable ? 'Tất cả' : `${n}`}
                     </button>
                   ))}
                 </div>
 
                 {/* Range slider */}
-                <div className="px-1">
-                  <input
-                    type="range"
-                    min={5}
-                    max={selectedPracticePart.questionCount}
-                    step={5}
-                    value={selectedQuestionCount || selectedPracticePart.questionCount}
-                    onChange={(e) => setSelectedQuestionCount(Number(e.target.value))}
-                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-slate-100 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
-                  />
-                  <div className="flex justify-between mt-1.5 text-xs text-slate-400">
-                    <span>5 câu</span>
-                    <span>{selectedPracticePart.questionCount} câu</span>
+                {totalAvailable > 1 && (
+                  <div className="px-1">
+                    <input
+                      type="range"
+                      min={1}
+                      max={totalAvailable}
+                      step={1}
+                      value={selectedQuestionCount || 1}
+                      onChange={(e) => setSelectedQuestionCount(Number(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-slate-100 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                    />
+                    <div className="flex justify-between mt-1.5 text-xs text-slate-400">
+                      <span>1 câu</span>
+                      <span>{totalAvailable} câu</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Summary */}
@@ -529,7 +606,7 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
                   </p>
                   <p className="text-xs text-slate-500">
                     {selectedQuestionCount > 0
-                      ? `Bạn sẽ luyện ${selectedQuestionCount} câu từ Part ${selectedPracticePart.partNumber}`
+                      ? `Bạn sẽ luyện ${selectedQuestionCount} câu từ Part ${selectedPracticePart.partNumber}${availableQuestionIds ? ' (chưa làm)' : ''}`
                       : 'Vui lòng chọn số câu để bắt đầu'}
                   </p>
                 </div>
@@ -553,6 +630,46 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
                   Bắt đầu ngay
                 </button>
               </div>
+            </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {showRestartChoiceModal && pendingPracticeSelection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              if (loadingUnanswered) return;
+              setShowRestartChoiceModal(false);
+              setPendingPracticeSelection(null);
+            }}
+          />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl border border-slate-100">
+            <h4 className="text-lg font-bold text-slate-900 mb-2">Luyện tập tiếp</h4>
+            <p className="text-sm text-slate-600 leading-relaxed mb-5">
+              Bạn có muốn luyện tập lại từ đầu không?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={choosePracticeUnanswered}
+                disabled={loadingUnanswered}
+                className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 text-sm font-semibold transition-colors"
+              >
+                {loadingUnanswered ? 'Đang tải...' : 'Từ chối'}
+              </button>
+              <button
+                type="button"
+                onClick={chooseRestartFromBeginning}
+                disabled={loadingUnanswered}
+                className="flex-1 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 text-sm font-bold transition-colors"
+              >
+                Chấp nhận
+              </button>
             </div>
           </div>
         </div>

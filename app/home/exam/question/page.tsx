@@ -286,6 +286,19 @@ function ExamQuestionContent() {
             }
           }
           loadedQuestions = await getQuestionsByIds(wrongIds);
+        } else if (practiceMode && source === 'unanswered') {
+          let unansweredIds: string[] = [];
+          if (typeof window !== 'undefined') {
+            const raw = sessionStorage.getItem('practice_unanswered_question_ids');
+            if (raw) {
+              try {
+                unansweredIds = JSON.parse(raw) as string[];
+              } catch {
+                unansweredIds = [];
+              }
+            }
+          }
+          loadedQuestions = await getQuestionsByIds(unansweredIds);
         } else if (practiceMode && partNumber >= 1 && partNumber <= 4) {
           loadedQuestions = await getQuestionsByListeningPartNumber(partNumber);
         } else if (practiceMode && partNumber >= 5) {

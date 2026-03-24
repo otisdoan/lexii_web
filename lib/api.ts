@@ -43,6 +43,37 @@ export interface ConfirmPaymentResponse {
   message?: string;
 }
 
+const QUESTIONS_PAGE_SIZE = 1000;
+
+async function fetchAllQuestionsByPartIds(
+  partIds: string[],
+): Promise<Array<{ id: string; part_id: string }>> {
+  if (!partIds.length) return [];
+
+  const rows: Array<{ id: string; part_id: string }> = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('questions')
+      .select('id,part_id')
+      .in('part_id', partIds)
+      .range(from, from + QUESTIONS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const page = (data || []) as Array<{ id: string; part_id: string }>;
+    if (!page.length) break;
+
+    rows.push(...page);
+
+    if (page.length < QUESTIONS_PAGE_SIZE) break;
+    from += QUESTIONS_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
 // ========== Test Repository ==========
 export async function getFullTests(): Promise<TestModel[]> {
   const { data, error } = await supabase
@@ -380,6 +411,128 @@ export async function getLessonNumbers(): Promise<number[]> {
   return unique;
 }
 
+export async function getSavedVocabularyIds(): Promise<string[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('user_saved_vocabulary')
+    .select('vocabulary_id')
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+  return (data || []).map((row: { vocabulary_id: string }) => row.vocabulary_id);
+}
+
+export async function getSavedVocabularyCount(): Promise<number> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count, error } = await supabase
+    .from('user_saved_vocabulary')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function setVocabularySaved(
+  vocabularyId: string,
+  isSaved: boolean,
+): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Bạn cần đăng nhập để lưu từ vựng.');
+  }
+
+  if (isSaved) {
+    const { error } = await supabase.from('user_saved_vocabulary').upsert(
+      {
+        user_id: user.id,
+        vocabulary_id: vocabularyId,
+      },
+      { onConflict: 'user_id,vocabulary_id' },
+    );
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase
+    .from('user_saved_vocabulary')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('vocabulary_id', vocabularyId);
+  if (error) throw error;
+}
+
+export async function getSavedGrammarIds(): Promise<string[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('user_saved_grammar')
+    .select('grammar_id')
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+  return (data || []).map((row: { grammar_id: string }) => row.grammar_id);
+}
+
+export async function getSavedGrammarCount(): Promise<number> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count, error } = await supabase
+    .from('user_saved_grammar')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function setGrammarSaved(
+  grammarId: string,
+  isSaved: boolean,
+): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Bạn cần đăng nhập để lưu ngữ pháp.');
+  }
+
+  if (isSaved) {
+    const { error } = await supabase.from('user_saved_grammar').upsert(
+      {
+        user_id: user.id,
+        grammar_id: grammarId,
+      },
+      { onConflict: 'user_id,grammar_id' },
+    );
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase
+    .from('user_saved_grammar')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('grammar_id', grammarId);
+  if (error) throw error;
+}
+
 // ========== Writing ==========
 export async function getWritingPartsCount(): Promise<Record<number, number>> {
   const { data, error } = await supabase
@@ -481,11 +634,7 @@ export async function getListeningPracticeParts(): Promise<PracticePartData[]> {
   if (allPartsError) throw allPartsError;
 
   const allPartIds = (allParts as Array<{ id: string }>).map(p => p.id);
-  const { data: questions, error: questionsError } = await supabase
-    .from('questions')
-    .select('id,part_id')
-    .in('part_id', allPartIds);
-  if (questionsError) throw questionsError;
+  const questions = await fetchAllQuestionsByPartIds(allPartIds);
 
   const questionCountByPartId: Record<string, number> = {};
   for (const q of (questions || []) as Array<{ part_id: string }>) {
@@ -834,11 +983,7 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
   if (allPartsError) throw allPartsError;
 
   const allPartIds = (allParts as Array<{ id: string }>).map(p => p.id);
-  const { data: questions, error: questionsError } = await supabase
-    .from('questions')
-    .select('id,part_id')
-    .in('part_id', allPartIds);
-  if (questionsError) throw questionsError;
+  const questions = await fetchAllQuestionsByPartIds(allPartIds);
 
   const questionCountByPartId: Record<string, number> = {};
   for (const q of (questions || []) as Array<{ part_id: string }>) {
@@ -914,6 +1059,53 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
       questionType: 'mcq_text',
     } as PracticePartData;
   });
+}
+
+export async function getUnansweredQuestionIdsForPracticePart(
+  partNumber: number,
+  questionType: string,
+): Promise<string[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const sourceQuestions =
+    questionType === 'mcq_audio'
+      ? await getQuestionsByListeningPartNumber(partNumber)
+      : await getQuestionsByReadingPartNumber(partNumber);
+
+  const allQuestionIds = sourceQuestions.map((q) => q.id);
+  if (!allQuestionIds.length) return [];
+
+  const answeredIds = new Set<string>();
+
+  const chunkSize = 500;
+  for (let i = 0; i < allQuestionIds.length; i += chunkSize) {
+    const chunk = allQuestionIds.slice(i, i + chunkSize);
+
+    if (questionType === 'mcq_audio') {
+      const { data, error } = await supabase
+        .from('listening_answer_history')
+        .select('question_id')
+        .eq('user_id', user.id)
+        .in('question_id', chunk);
+      if (error) throw error;
+      for (const row of (data || []) as Array<{ question_id: string }>) {
+        if (row.question_id) answeredIds.add(row.question_id);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('answers')
+        .select('question_id,option_id,attempts!inner(user_id)')
+        .eq('attempts.user_id', user.id)
+        .in('question_id', chunk);
+      if (error) throw error;
+      for (const row of (data || []) as Array<{ question_id: string; option_id: string | null }>) {
+        if (row.question_id && row.option_id) answeredIds.add(row.question_id);
+      }
+    }
+  }
+
+  return allQuestionIds.filter((id) => !answeredIds.has(id));
 }
 
 // ========== Auth ==========

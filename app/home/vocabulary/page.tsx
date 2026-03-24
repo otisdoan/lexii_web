@@ -31,7 +31,12 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { getVocabulary, getLessonNumbers } from '@/lib/api';
+import {
+  getVocabulary,
+  getLessonNumbers,
+  getSavedVocabularyIds,
+  setVocabularySaved,
+} from '@/lib/api';
 import { WordDetailCard } from '@/components/WordDetailCard';
 import type { VocabularyModel } from '@/lib/types';
 
@@ -83,12 +88,21 @@ interface DictResult {
 
 interface WordCardProps {
   word: VocabularyModel;
+  isSaved: boolean;
   isPlaying: boolean;
   onPlay: (url: string, id: string) => void;
+  onToggleSaved: (wordId: string) => void;
   onWordClick: (word: VocabularyModel) => void;
 }
 
-function WordCard({ word, isPlaying, onPlay, onWordClick }: WordCardProps) {
+function WordCard({
+  word,
+  isSaved,
+  isPlaying,
+  onPlay,
+  onToggleSaved,
+  onWordClick,
+}: WordCardProps) {
   const score = SCORE_LABELS[word.score_level] || SCORE_LABELS[0];
   return (
     <div
@@ -111,26 +125,40 @@ function WordCard({ word, isPlaying, onPlay, onWordClick }: WordCardProps) {
             <p className="text-xs text-slate-400 mt-1.5">Bài {word.lesson}</p>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (word.audio_url) onPlay(word.audio_url, word.id);
-          }}
-          disabled={!word.audio_url}
-          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 ${
-            isPlaying
-              ? 'bg-red-100 text-red-500 shadow-sm'
-              : word.audio_url
-                ? 'bg-slate-50 text-slate-400 hover:bg-primary hover:text-white group-hover:bg-primary group-hover:text-white'
-                : 'bg-slate-50 text-slate-300 cursor-not-allowed'
-          }`}
-        >
-          {isPlaying ? (
-            <VolumeX className="w-4 h-4" />
-          ) : (
-            <Volume2 className="w-4 h-4" />
-          )}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSaved(word.id);
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 bg-slate-50 text-slate-400 hover:bg-amber-50 hover:text-amber-500"
+            title={isSaved ? 'Bỏ lưu từ vựng' : 'Lưu từ vựng'}
+          >
+            <Star
+              className={`w-4 h-4 ${isSaved ? 'fill-amber-400 text-amber-500' : ''}`}
+            />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (word.audio_url) onPlay(word.audio_url, word.id);
+            }}
+            disabled={!word.audio_url}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+              isPlaying
+                ? 'bg-red-100 text-red-500 shadow-sm'
+                : word.audio_url
+                  ? 'bg-slate-50 text-slate-400 hover:bg-primary hover:text-white group-hover:bg-primary group-hover:text-white'
+                  : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+            }`}
+          >
+            {isPlaying ? (
+              <VolumeX className="w-4 h-4" />
+            ) : (
+              <Volume2 className="w-4 h-4" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -315,8 +343,28 @@ export default function VocabularyPage() {
   const [learnMode, setLearnMode] = useState(0);
   const [englishToVietnamese, setEnglishToVietnamese] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [savedOnlyFilter, setSavedOnlyFilter] = useState(false);
+  const [savedWordIds, setSavedWordIds] = useState<Set<string>>(new Set());
   const PAGE_SIZE = 20;
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    const tabQuery = params.get('tab');
+    if (tabQuery && tabQuery.toLowerCase() === 'learn') {
+      setTab('learn');
+    }
+
+    const savedQuery = params.get('saved');
+    if (savedQuery) {
+      const normalized = savedQuery.trim().toLowerCase();
+      if (normalized === '1' || normalized === 'true' || normalized === 'yes') {
+        setSavedOnlyFilter(true);
+        setTab('learn');
+      }
+    }
+  }, []);
 
   // Debounced search for dictionary lookup
   const handleSearchInput = (value: string) => {
@@ -398,13 +446,22 @@ export default function VocabularyPage() {
 
   // Load vocabulary from DB
   useEffect(() => {
+    async function loadSaved() {
+      try {
+        const ids = await getSavedVocabularyIds();
+        setSavedWordIds(new Set(ids));
+      } catch {
+        setSavedWordIds(new Set());
+      }
+    }
+    loadSaved();
+  }, []);
+
+  useEffect(() => {
     async function init() {
       try {
         const ls = await getLessonNumbers();
         setLessons(ls);
-        if (ls.length > 0) {
-          setLessonFilter(prev => (prev === 'all' ? ls[0] : prev));
-        }
       } catch {
         //
       }
@@ -428,6 +485,9 @@ export default function VocabularyPage() {
             w.definition.toLowerCase().includes(q)
           );
         }
+        if (savedOnlyFilter) {
+          filtered = filtered.filter(w => savedWordIds.has(w.id));
+        }
         setTotal(filtered.length);
         setWords(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
       } catch {
@@ -437,7 +497,38 @@ export default function VocabularyPage() {
       }
     }
     load();
-  }, [lessonFilter, scoreFilter, search, page]);
+  }, [lessonFilter, scoreFilter, search, page, savedOnlyFilter, savedWordIds]);
+
+  const toggleSavedWord = async (wordId: string) => {
+    const wasSaved = savedWordIds.has(wordId);
+    const nextSaved = !wasSaved;
+
+    setSavedWordIds(prev => {
+      const next = new Set(prev);
+      if (wasSaved) {
+        next.delete(wordId);
+      } else {
+        next.add(wordId);
+      }
+      return next;
+    });
+    setPage(0);
+
+    try {
+      await setVocabularySaved(wordId, nextSaved);
+    } catch {
+      setSavedWordIds(prev => {
+        const rollback = new Set(prev);
+        if (wasSaved) {
+          rollback.add(wordId);
+        } else {
+          rollback.delete(wordId);
+        }
+        return rollback;
+      });
+      window.alert('Không lưu được từ vựng lúc này. Vui lòng thử lại.');
+    }
+  };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -593,7 +684,7 @@ export default function VocabularyPage() {
               Bộ lọc
             </button>
             <div className="text-xs text-slate-500">
-              Bài {lessonFilter === 'all' ? 'tất cả' : lessonFilter} • {scoreFilter === 'all' ? 'mọi mức' : `${scoreFilter}+`}
+              Bài {lessonFilter === 'all' ? 'tất cả' : lessonFilter} • {scoreFilter === 'all' ? 'mọi mức' : `${scoreFilter}+`} • {savedOnlyFilter ? 'Từ vựng đã lưu' : 'Mọi từ vựng'}
             </div>
           </div>
 
@@ -654,6 +745,32 @@ export default function VocabularyPage() {
                       {SCORE_LABELS[level].label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-500 mb-2">Danh mục</p>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => { setSavedOnlyFilter(false); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      !savedOnlyFilter
+                        ? 'bg-primary text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Mọi từ vựng
+                  </button>
+                  <button
+                    onClick={() => { setSavedOnlyFilter(true); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      savedOnlyFilter
+                        ? 'bg-primary text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Từ vựng đã lưu
+                  </button>
                 </div>
               </div>
             </div>
@@ -724,7 +841,9 @@ export default function VocabularyPage() {
           ) : learnMode === 0 && words.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
               <Bookmark className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Không tìm thấy từ vựng nào</p>
+              <p className="text-sm text-slate-500">
+                {savedOnlyFilter ? 'Chưa có từ vựng đã lưu' : 'Không tìm thấy từ vựng nào'}
+              </p>
             </div>
           ) : learnMode === 0 ? (
             <div className="space-y-2">
@@ -732,8 +851,10 @@ export default function VocabularyPage() {
                 <WordCard
                   key={word.id}
                   word={word}
+                  isSaved={savedWordIds.has(word.id)}
                   isPlaying={playingWordId === word.id}
                   onPlay={playWordAudio}
+                  onToggleSaved={toggleSavedWord}
                   onWordClick={handleWordClick}
                 />
               ))}
