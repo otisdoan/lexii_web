@@ -19,8 +19,8 @@ import { RoadmapCertificationButton } from "@/components/roadmap/RoadmapCertific
 
 const SCORE_TARGETS = [
   {
-    score: 300,
-    label: "300+",
+    score: 350,
+    label: "350+",
     desc: "Cơ bản",
     color: "from-gray-400 to-gray-500",
   },
@@ -31,8 +31,8 @@ const SCORE_TARGETS = [
     color: "from-blue-400 to-blue-500",
   },
   {
-    score: 600,
-    label: "600+",
+    score: 550,
+    label: "550+",
     desc: "Trung cấp",
     color: "from-green-400 to-green-500",
   },
@@ -65,7 +65,7 @@ const DURATION_OPTIONS = [
   { days: 180, label: "180 ngày", desc: "6 tháng", icon: "🏆" },
 ];
 
-const SELF_ASSESS_SCORES = [200, 300, 450, 600, 750, 900];
+const SELF_ASSESS_SCORES = [0, 200, 350, 550, 750, 900];
 
 const STEPS = [
   { label: "Mục tiêu", icon: Target },
@@ -83,11 +83,13 @@ function CreateRoadmapContent() {
 
   // Step 1
   const [targetScore, setTargetScore] = useState<number | null>(null);
+  const [targetScoreInput, setTargetScoreInput] = useState("");
 
   // Step 2
   const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [assessLoading, setAssessLoading] = useState(false);
   const [selfScore, setSelfScore] = useState<number | null>(null);
+  const [selfScoreInput, setSelfScoreInput] = useState("");
   const [useSelfAssess, setUseSelfAssess] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [attemptSeries, setAttemptSeries] = useState<LinePoint[]>([]);
@@ -103,6 +105,7 @@ function CreateRoadmapContent() {
   const [creating, setCreating] = useState(false);
   const [warning, setWarning] = useState<RoadmapWarning | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
 
   const currentScore = useSelfAssess
     ? (selfScore ?? 0)
@@ -209,6 +212,26 @@ function CreateRoadmapContent() {
     }
   }
 
+  function handleSelfScoreInputChange(value: string) {
+    setSelfScoreInput(value);
+    if (!value.trim()) {
+      setSelfScore(null);
+      return;
+    }
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      setSelfScore(null);
+      return;
+    }
+    const clamped = Math.min(990, Math.max(0, Math.round(numeric)));
+    setSelfScore(clamped);
+  }
+
+  function normalizeSelfScoreInput() {
+    if (selfScore === null) return;
+    setSelfScoreInput(String(selfScore));
+  }
+
   async function handleCreate() {
     if (!targetScore || !actualDuration) {
       setError("Vui lòng chọn mục tiêu và thời gian trước khi tạo lộ trình.");
@@ -253,7 +276,7 @@ function CreateRoadmapContent() {
       }
 
       if (data.success) {
-        router.push("/home/roadmap");
+        setCreated(true);
       }
     } catch {
       setError("Lỗi kết nối. Vui lòng thử lại.");
@@ -282,6 +305,26 @@ function CreateRoadmapContent() {
         return false;
     }
   };
+
+  function handleTargetScoreInputChange(value: string) {
+    setTargetScoreInput(value);
+    if (!value.trim()) {
+      setTargetScore(null);
+      return;
+    }
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      setTargetScore(null);
+      return;
+    }
+    const clamped = Math.min(990, Math.max(0, Math.round(numeric)));
+    setTargetScore(clamped);
+  }
+
+  function normalizeTargetScoreInput() {
+    if (targetScore === null) return;
+    setTargetScoreInput(String(targetScore));
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-20 lg:pb-6">
@@ -346,7 +389,10 @@ function CreateRoadmapContent() {
               {SCORE_TARGETS.map((st) => (
                 <button
                   key={st.score}
-                  onClick={() => setTargetScore(st.score)}
+                  onClick={() => {
+                    setTargetScore(st.score);
+                    setTargetScoreInput(String(st.score));
+                  }}
                   className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                     targetScore === st.score
                       ? "border-teal-500 bg-teal-50 shadow-md"
@@ -362,6 +408,26 @@ function CreateRoadmapContent() {
                   )}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-medium text-slate-600">
+                Nhập điểm mục tiêu (0 - 990)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={990}
+                step={1}
+                inputMode="numeric"
+                value={targetScoreInput}
+                onChange={(event) =>
+                  handleTargetScoreInputChange(event.target.value)
+                }
+                onBlur={normalizeTargetScoreInput}
+                placeholder="Ví dụ: 650"
+                className="mt-2 w-full rounded-xl border-2 border-slate-100 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-teal-400"
+              />
             </div>
 
             <div className="mt-4 text-center">
@@ -454,7 +520,10 @@ function CreateRoadmapContent() {
                   {SELF_ASSESS_SCORES.map((sc) => (
                     <button
                       key={sc}
-                      onClick={() => setSelfScore(sc)}
+                      onClick={() => {
+                        setSelfScore(sc);
+                        setSelfScoreInput(String(sc));
+                      }}
                       className={`py-3 px-4 rounded-xl border-2 text-center font-bold transition-all ${
                         selfScore === sc
                           ? "border-teal-500 bg-teal-50 text-teal-700"
@@ -464,6 +533,26 @@ function CreateRoadmapContent() {
                       {sc}
                     </button>
                   ))}
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-xs font-medium text-slate-600">
+                    Nhập điểm bất kỳ (0 - 990)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={990}
+                    step={1}
+                    inputMode="numeric"
+                    value={selfScoreInput}
+                    onChange={(event) =>
+                      handleSelfScoreInputChange(event.target.value)
+                    }
+                    onBlur={normalizeSelfScoreInput}
+                    placeholder="Ví dụ: 420"
+                    className="mt-2 w-full rounded-xl border-2 border-slate-100 px-4 py-3 text-sm text-slate-700 outline-none transition-all focus:border-teal-400"
+                  />
                 </div>
 
                 {assessment && assessment.method !== "self_assessed" && (
@@ -667,23 +756,32 @@ function CreateRoadmapContent() {
               </div>
             )}
 
-            <button
-              onClick={handleCreate}
-              disabled={creating}
-              className="w-full py-4 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-teal-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {creating ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Đang tạo...
-                </>
-              ) : (
-                <>
-                  <Rocket className="w-5 h-5" />
-                  Tạo lộ trình cho tôi! 🚀
-                </>
-              )}
-            </button>
+            {created ? (
+              <button
+                onClick={() => router.push("/home/roadmap")}
+                className="w-full py-4 bg-teal-600 text-white rounded-xl font-bold text-lg hover:bg-teal-700 transition-all"
+              >
+                Xem lộ trình đã tạo
+              </button>
+            ) : (
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="w-full py-4 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-teal-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Đang tạo...
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-5 h-5" />
+                    Tạo lộ trình cho tôi! 🚀
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>

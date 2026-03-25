@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createUserRoadmap, getActiveRoadmap } from "@/lib/roadmap";
+import {
+  createUserRoadmap,
+  getActiveRoadmap,
+  getRoadmapTemplates,
+} from "@/lib/roadmap";
 import type { CreateRoadmapRequest } from "@/lib/types";
 
 const supabaseUrl =
@@ -70,6 +74,18 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
+
+    const templates = await getRoadmapTemplates(supabase);
+    console.log(
+      "[ROADMAP/CREATE] Templates from DB:",
+      templates.map((t) => ({
+        id: t.id,
+        title: t.title,
+        start_score: t.start_score,
+        target_score: t.target_score,
+        is_active: t.is_active,
+      })),
+    );
 
     const result = await createUserRoadmap(
       user.id,

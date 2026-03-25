@@ -38,7 +38,7 @@ export interface OptionModel {
 export interface QuestionMediaModel {
   id: string;
   question_id: string;
-  type: 'audio' | 'image' | 'text';
+  type: "audio" | "image" | "text";
   url: string;
 }
 
@@ -154,7 +154,7 @@ export interface SpeakingPromptModel {
 export interface PracticeHistoryItem {
   id: string;
   user_id: string;
-  mode: 'speaking' | 'writing';
+  mode: "speaking" | "writing";
   part_number: number;
   prompt_id: string;
   prompt_title: string;
@@ -266,6 +266,7 @@ export interface TemplateTask {
   sequence_order: number;
   task_type: RoadmapTaskType;
   is_standalone: boolean;
+  task_weight?: number | null;
   reference_id: string | null;
   title: string;
   description: string | null;
@@ -273,16 +274,16 @@ export interface TemplateTask {
 }
 
 export type RoadmapTaskType =
-  | 'vocabulary'
-  | 'grammar'
-  | 'listening'
-  | 'reading'
-  | 'speaking'
-  | 'writing'
-  | 'practice'
-  | 'mini_test'
-  | 'review'
-  | 'full_test';
+  | "vocabulary"
+  | "grammar"
+  | "listening"
+  | "reading"
+  | "speaking"
+  | "writing"
+  | "practice"
+  | "mini_test"
+  | "review"
+  | "full_test";
 
 // ========== User Roadmap ==========
 export interface UserRoadmap {
@@ -301,7 +302,7 @@ export interface UserRoadmap {
   updated_at: string;
 }
 
-export type RoadmapStatus = 'active' | 'completed' | 'abandoned' | 'paused';
+export type RoadmapStatus = "active" | "completed" | "abandoned" | "paused";
 
 export interface UserDailySchedule {
   id: string;
@@ -331,15 +332,15 @@ export interface UserTask {
 
 // ========== Assessment ==========
 export type AssessmentMethod =
-  | 'exam_history'
-  | 'practice_estimate'
-  | 'self_assessed'
-  | 'placement_test';
+  | "exam_history"
+  | "practice_estimate"
+  | "self_assessed"
+  | "placement_test";
 
 export interface AssessmentResult {
   method: AssessmentMethod;
   current_score: number;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   details: {
     source: string;
     exam_count?: number;
@@ -366,7 +367,7 @@ export interface CreateRoadmapResponse {
 }
 
 export interface RoadmapWarning {
-  type: 'unrealistic_schedule' | 'score_already_achieved';
+  type: "unrealistic_schedule" | "score_already_achieved";
   message: string;
   suggestion: string;
   recommended_days?: number;

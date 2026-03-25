@@ -463,7 +463,7 @@ export default function RoadmapPage() {
               Hủy lộ trình?
             </h3>
             <p className="text-sm text-slate-600 text-center mt-2">
-              Toàn bộ tiến độ học tập của chặng 0-350 sẽ bị xóa bỏ và không thể
+              Toàn bộ tiến độ học tập lộ trình của bạn sẽ bị xóa bỏ và không thể
               khôi phục.
             </p>
 

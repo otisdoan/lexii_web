@@ -248,6 +248,12 @@ export async function createUserRoadmap(
     }
   }
 
+  console.log("[ROADMAP/CREATE] Merged template tasks:", {
+    templateIds,
+    allTasksCount: allTasks.length,
+    renumberedCount: renumberedTasks.length,
+  });
+
   const totalStandardDays = matchedTemplates.reduce(
     (sum, t) => sum + t.default_duration_days,
     0,
@@ -311,7 +317,8 @@ export async function createUserRoadmap(
     if (dayPlan.tasks.length > 0) {
       const taskRows = dayPlan.tasks.map((task, idx) => ({
         daily_schedule_id: schedule.id,
-        template_task_id: task.id,
+        template_task_id:
+          task.template_id === "dynamic-padding-task" ? null : task.id,
         task_type: task.task_type,
         is_standalone: task.is_standalone || false,
         reference_id: task.reference_id,

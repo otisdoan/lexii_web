@@ -146,84 +146,118 @@ export interface ScheduleDayPlan {
 }
 
 /**
- * 2-Step Dynamic Allocation: phân bổ TẤT CẢ tasks vào ngày học.
- * KHÔNG BAO GIỜ bỏ rơi task nào — vòng lặp chạy đến khi hết queue.
- * Pace được tính từ (normalTasks / normalDayBudget).
+ * Accumulation Logic (Water in a Bottle): phân bổ tasks theo trọng số tích lũy.
+ * TotalWeight / durationDays -> DailyBudget.
+ * Cho phép ngày trống, ưu tiên phân bổ từ ngày 1.
  */
+export function generateSmartSchedule(
+  templateTasks: TemplateTask[],
+  durationDays: number,
+  startDate: Date,
+): ScheduleDayPlan[] {
+  if (durationDays <= 0) return [];
+
+  const sorted = [...templateTasks].sort(
+    (a, b) => a.sequence_order - b.sequence_order,
+  );
+
+  const schedules: ScheduleDayPlan[] = Array.from(
+    { length: durationDays },
+    (_, index) => {
+      const studyDate = new Date(startDate);
+      studyDate.setDate(studyDate.getDate() + index);
+      return {
+        actual_day_number: index + 1,
+        study_date: studyDate.toISOString().split("T")[0],
+        total_estimated_minutes: 0,
+        tasks: [],
+      };
+    },
+  );
+
+  if (sorted.length === 0) return schedules;
+
+  const totalWeight = sorted.reduce(
+    (sum, task) => sum + (task.task_weight ?? 1),
+    0,
+  );
+  const dailyBudget = totalWeight / durationDays;
+
+  let dayIndex = 0;
+  let wallet =
+    sorted.length > 0
+      ? Math.max(dailyBudget, sorted[0].task_weight ?? 1)
+      : dailyBudget;
+
+  for (const task of sorted) {
+    const weight = task.task_weight ?? 1;
+
+    while (wallet < weight && dayIndex < durationDays - 1) {
+      dayIndex += 1;
+      wallet += dailyBudget;
+    }
+
+    schedules[dayIndex].tasks.push(task);
+    wallet = Math.max(0, wallet - weight);
+  }
+
+  // ========================================================
+  // POST-PROCESSING: LẤP ĐẦY NGÀY TRỐNG (SPACED REPETITION)
+  // ========================================================
+  let lastLearnedTitles: string[] = [];
+
+  for (const day of schedules) {
+    // CHỈ lấy các Task gốc (Bỏ qua các task đệm đã tạo từ trước nếu có)
+    const originalTasks = day.tasks.filter(
+      (t) => t.template_id !== "dynamic-padding-task",
+    );
+
+    if (originalTasks.length > 0) {
+      // Cập nhật bộ nhớ bằng tên bài học mới
+      lastLearnedTitles = originalTasks.map((t) => t.title);
+    } else {
+      // Nếu ngày trống, tạo Task đệm
+      const reviewTitle =
+        lastLearnedTitles.length > 0
+          ? `Ôn tập: ${lastLearnedTitles.join(", ")}`
+          : "Ôn tập tự do (Từ vựng/Ngữ pháp)";
+
+      const paddingTask: TemplateTask = {
+        id: crypto.randomUUID(),
+        template_id: "dynamic-padding-task", // Cờ đánh dấu đây là task đệm
+        sequence_order: 9999,
+        task_type: "review",
+        is_standalone: false,
+        reference_id: null,
+        title: reviewTitle,
+        description:
+          "Ôn tập lại kiến thức gần nhất để khắc sâu vào trí nhớ (Spaced Repetition).",
+        estimated_minutes: 10,
+        task_weight: 0,
+      };
+
+      day.tasks.push(paddingTask);
+    }
+  }
+
+  for (const day of schedules) {
+    day.total_estimated_minutes = day.tasks.reduce(
+      (sum, t) => sum + (t.estimated_minutes || 15),
+      0,
+    );
+  }
+
+  return schedules;
+}
+
+// Backward-compatible wrapper
 export function generateUserSchedule(
   allTemplateTasks: TemplateTask[],
   _totalStandardDays: number,
   userDays: number,
   startDate: Date,
 ): ScheduleDayPlan[] {
-  // Sort tasks by sequence_order
-  const sorted = [...allTemplateTasks].sort(
-    (a, b) => a.sequence_order - b.sequence_order,
-  );
-
-  if (sorted.length === 0) return [];
-
-  // === Bước 1: Tính quỹ ngày cho normal tasks ===
-  const standaloneCount = sorted.filter((t) => t.is_standalone).length;
-  const normalCount = sorted.length - standaloneCount;
-  const normalDayBudget = Math.max(1, userDays - standaloneCount);
-
-  // Pace = số normal tasks trung bình mỗi ngày (có thể > 10 nếu lộ trình ngắn)
-  const pace = normalCount > 0 ? normalCount / normalDayBudget : 1;
-  const tasksPerDay = Math.max(1, Math.ceil(pace));
-
-  // === Bước 2: Duyệt toàn bộ queue, KHÔNG dừng giữa chừng ===
-  const schedules: ScheduleDayPlan[] = [];
-  let currentDayNumber = 1;
-  let currentDayTasks: TemplateTask[] = [];
-  let normalTasksInCurrentDay = 0;
-
-  function flushCurrentDay() {
-    if (currentDayTasks.length === 0) return;
-    const studyDate = new Date(startDate);
-    studyDate.setDate(studyDate.getDate() + currentDayNumber - 1);
-    const totalMinutes = currentDayTasks.reduce(
-      (sum, t) => sum + (t.estimated_minutes || 15),
-      0,
-    );
-    schedules.push({
-      actual_day_number: currentDayNumber,
-      study_date: studyDate.toISOString().split("T")[0],
-      total_estimated_minutes: totalMinutes,
-      tasks: currentDayTasks,
-    });
-    currentDayNumber++;
-    currentDayTasks = [];
-    normalTasksInCurrentDay = 0;
-  }
-
-  // Iterate through every task in the queue — no truncation
-  let taskIndex = 0;
-  while (taskIndex < sorted.length) {
-    const task = sorted[taskIndex];
-
-    if (task.is_standalone) {
-      // Đóng ngày hiện tại nếu đang có tasks
-      flushCurrentDay();
-      // Tạo ngày riêng cho standalone task
-      currentDayTasks = [task];
-      flushCurrentDay();
-    } else {
-      currentDayTasks.push(task);
-      normalTasksInCurrentDay++;
-      // Nếu đã đủ pace cho ngày này → đóng ngày
-      if (normalTasksInCurrentDay >= tasksPerDay) {
-        flushCurrentDay();
-      }
-    }
-
-    taskIndex++;
-  }
-
-  // Flush any remaining tasks in the buffer
-  flushCurrentDay();
-
-  return schedules;
+  return generateSmartSchedule(allTemplateTasks, userDays, startDate);
 }
 
 // ========== Feasibility Check ==========
@@ -269,7 +303,7 @@ export function checkFeasibility(
 
   // Nặng vừa: > 3h/ngày
   if (maxDay.total_estimated_minutes > MAX_DAILY_MINUTES) {
-    const avgHours = Math.round(avgMinutesPerDay / 60 * 10) / 10;
+    const avgHours = Math.round((avgMinutesPerDay / 60) * 10) / 10;
     return {
       type: "unrealistic_schedule",
       message: `Lộ trình này yêu cầu trung bình ~${avgHours} tiếng/ngày. Tổng ${totalTasks} bài.`,
