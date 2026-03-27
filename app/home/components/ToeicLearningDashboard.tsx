@@ -161,6 +161,8 @@ export default function ToeicLearningDashboard({ examHistory, speakingHistory, a
         type: 'gauge',
         min: 0,
         max: 990,
+        radius: '82%',
+        center: ['50%', '52%'],
         progress: { show: true, width: 14, roundCap: true },
         axisLine: {
           lineStyle: {
@@ -172,10 +174,10 @@ export default function ToeicLearningDashboard({ examHistory, speakingHistory, a
             ],
           },
         },
-        splitLine: { distance: -18, length: 8, lineStyle: { color: '#cbd5e1', width: 1 } },
-        axisTick: { distance: -18, length: 4, lineStyle: { color: '#94a3b8', width: 1 } },
+        splitLine: { distance: 2, length: 8, lineStyle: { color: '#cbd5e1', width: 1 } },
+        axisTick: { distance: 6, length: 4, lineStyle: { color: '#94a3b8', width: 1 } },
         axisLabel: {
-          distance: 18,
+          distance: 24,
           color: '#64748b',
           fontSize: 11,
         },
@@ -193,14 +195,14 @@ export default function ToeicLearningDashboard({ examHistory, speakingHistory, a
         detail: {
           valueAnimation: true,
           formatter: '{value}',
-          fontSize: 34,
+          fontSize: 30,
           fontWeight: 700,
           color: '#0f172a',
-          offsetCenter: [0, '58%'],
+          offsetCenter: [0, '104%'],
         },
         title: {
-          offsetCenter: [0, '30%'],
-          fontSize: 14,
+          offsetCenter: [0, '84%'],
+          fontSize: 13,
           color: '#475569',
         },
         data: [{ value: currentScore, name: 'Điểm hiện tại' }],
