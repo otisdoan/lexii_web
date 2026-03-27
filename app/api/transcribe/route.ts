@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 
-const WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const ASSEMBLY_UPLOAD_URL = 'https://api.assemblyai.com/v2/upload';
+const ASSEMBLY_TRANSCRIPT_URL = 'https://api.assemblyai.com/v2/transcript';
+
+type ProviderResult = {
+  ok: boolean;
+  text?: string;
+  status?: number;
+  error?: string;
+};
 
 export async function POST(req: Request) {
   let formData: FormData;
@@ -15,57 +23,132 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY || '';
+  const assemblyAiKey = process.env.ASSEMBLYAI_API_KEY || '';
 
-  if (!apiKey) {
-    console.log('[TRANSCRIBE] No OPENAI_API_KEY found, returning fallback');
-    return NextResponse.json({ error: 'No API key configured' }, { status: 503 });
+  if (!assemblyAiKey) {
+    console.log('[TRANSCRIBE] Missing ASSEMBLYAI_API_KEY');
+    return NextResponse.json(
+      { error: 'Thiếu ASSEMBLYAI_API_KEY cho transcribe.' },
+      { status: 503 }
+    );
   }
 
   try {
-    const audioFormData = new FormData();
-    audioFormData.append('file', file);
-    audioFormData.append('model', 'whisper-1');
-    audioFormData.append('language', 'en');
-    audioFormData.append('response_format', 'json');
-
-    console.log('[TRANSCRIBE] Sending to Whisper API, file size:', file.size, 'bytes');
-
-    let retries = 2;
-    let res: Response;
-    while (retries >= 0) {
-      res = await fetch(WHISPER_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: audioFormData,
-      });
-
-      if (res.ok) break;
-      if (res.status === 429 && retries > 0) {
-        console.warn('[TRANSCRIBE] Rate limited, retrying in 2s...');
-        await new Promise(r => setTimeout(r, 2000));
-        retries--;
-        continue;
-      }
-      break;
+    const result = await transcribeWithAssemblyAI(file, assemblyAiKey);
+    if (result.ok && result.text) {
+      console.log('[TRANSCRIBE] assemblyai result:', result.text);
+      return NextResponse.json({ text: result.text });
     }
 
-    if (!res!.ok) {
-      const errText = await res!.text();
-      console.error('[TRANSCRIBE] Whisper API error:', res!.status, errText);
-      return NextResponse.json({ error: `Whisper lỗi (${res!.status}). Vui lòng thử lại sau giây lát.` }, { status: res!.status });
+    if (result.status === 429) {
+      return NextResponse.json(
+        { error: 'AssemblyAI đang hết quota hoặc bị giới hạn tần suất (429). Vui lòng kiểm tra quota/billing rồi thử lại.' },
+        { status: 429 }
+      );
     }
 
-    const data = (await res!.json()) as { text?: string };
-    const text = (data.text || '').trim();
-
-    console.log('[TRANSCRIBE] Whisper result:', text);
-
-    return NextResponse.json({ text });
+    return NextResponse.json(
+      { error: result.error || 'AssemblyAI transcription failed' },
+      { status: result.status || 500 }
+    );
   } catch (err) {
-    console.error('[TRANSCRIBE] Exception:', err);
-    return NextResponse.json({ error: 'Transcription failed' }, { status: 500 });
+    console.error('[TRANSCRIBE] assemblyai exception:', err);
+    return NextResponse.json({ error: 'AssemblyAI transcription failed' }, { status: 500 });
   }
+}
+
+async function transcribeWithAssemblyAI(file: File, apiKey: string): Promise<ProviderResult> {
+  console.log('[TRANSCRIBE] Sending to AssemblyAI, file size:', file.size, 'bytes');
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  const uploadRes = await fetch(ASSEMBLY_UPLOAD_URL, {
+    method: 'POST',
+    headers: {
+      authorization: apiKey,
+      'content-type': 'application/octet-stream',
+    },
+    body: bytes,
+  });
+
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    return {
+      ok: false,
+      status: uploadRes.status,
+      error: `AssemblyAI upload lỗi (${uploadRes.status}): ${errText.slice(0, 300)}`,
+    };
+  }
+
+  const uploadData = (await uploadRes.json()) as { upload_url?: string };
+  const uploadUrl = uploadData.upload_url || '';
+  if (!uploadUrl) {
+    return { ok: false, status: 500, error: 'AssemblyAI upload không trả về upload_url' };
+  }
+
+  const createRes = await fetch(ASSEMBLY_TRANSCRIPT_URL, {
+    method: 'POST',
+    headers: {
+      authorization: apiKey,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      audio_url: uploadUrl,
+      language_code: 'en',
+      speech_models: ['universal-2'],
+    }),
+  });
+
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    return {
+      ok: false,
+      status: createRes.status,
+      error: `AssemblyAI create transcript lỗi (${createRes.status}): ${errText.slice(0, 300)}`,
+    };
+  }
+
+  const createData = (await createRes.json()) as { id?: string };
+  const transcriptId = createData.id || '';
+  if (!transcriptId) {
+    return { ok: false, status: 500, error: 'AssemblyAI không trả về transcript id' };
+  }
+
+  for (let i = 0; i < 24; i += 1) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const pollRes = await fetch(`${ASSEMBLY_TRANSCRIPT_URL}/${transcriptId}`, {
+      headers: {
+        authorization: apiKey,
+      },
+    });
+
+    if (!pollRes.ok) {
+      const errText = await pollRes.text();
+      return {
+        ok: false,
+        status: pollRes.status,
+        error: `AssemblyAI poll lỗi (${pollRes.status}): ${errText.slice(0, 300)}`,
+      };
+    }
+
+    const pollData = (await pollRes.json()) as {
+      status?: string;
+      text?: string;
+      error?: string;
+    };
+
+    if (pollData.status === 'completed') {
+      return { ok: true, text: (pollData.text || '').trim() };
+    }
+
+    if (pollData.status === 'error') {
+      return {
+        ok: false,
+        status: 500,
+        error: `AssemblyAI transcript error: ${pollData.error || 'unknown error'}`,
+      };
+    }
+  }
+
+  return { ok: false, status: 504, error: 'AssemblyAI timeout khi chờ transcript hoàn tất' };
 }

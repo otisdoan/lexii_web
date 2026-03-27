@@ -25,6 +25,12 @@ const PART_META: Record<number, { label: string; color: string; bg: string; task
   3: { label: 'Viết luận', color: 'text-teal-600', bg: 'bg-teal-50', taskLabel: 'Viết bài luận trình bày quan điểm' },
 };
 
+const MIN_WORDS_REQUIRED = 6;
+
+function countWords(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
 function WritingQuestionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -76,7 +82,7 @@ function WritingQuestionContent() {
   const currentAnswer = currentPrompt ? (answers[currentPrompt.id] || '') : '';
   const isLast = currentIndex === prompts.length - 1;
 
-  const wordCount = currentAnswer.trim() ? currentAnswer.trim().split(/\s+/).filter(Boolean).length : 0;
+  const wordCount = countWords(currentAnswer);
 
   const handleAnswerChange = useCallback((text: string) => {
     if (currentPrompt) {
@@ -99,6 +105,16 @@ function WritingQuestionContent() {
   };
 
   const handleSubmit = () => {
+    const invalidPrompt = prompts.find(p => countWords(answers[p.id] || '') < MIN_WORDS_REQUIRED);
+    if (invalidPrompt) {
+      const invalidIndex = prompts.findIndex(p => p.id === invalidPrompt.id);
+      if (invalidIndex >= 0) {
+        setCurrentIndex(invalidIndex);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      window.alert(`Mỗi câu cần tối thiểu ${MIN_WORDS_REQUIRED} từ trước khi nộp bài.`);
+      return;
+    }
     doSubmit();
   };
 
@@ -147,7 +163,7 @@ function WritingQuestionContent() {
           <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </div>
         <p className="text-lg font-bold text-slate-600">Chưa có đề bài</p>
-        <button onClick={() => router.back()} className="px-6 py-2.5 bg-primary text-white rounded-full font-medium hover:bg-primary-dark transition-colors">
+        <button onClick={() => router.push('/home')} className="px-6 py-2.5 bg-primary text-white rounded-full font-medium hover:bg-primary-dark transition-colors">
           Quay lại
         </button>
       </div>
@@ -155,6 +171,7 @@ function WritingQuestionContent() {
   }
 
   const answeredCount = prompts.filter(p => (answers[p.id] || '').trim().length > 0).length;
+  const invalidPromptCount = prompts.filter(p => countWords(answers[p.id] || '') < MIN_WORDS_REQUIRED).length;
 
   return (
     <div>
@@ -320,7 +337,11 @@ function WritingQuestionContent() {
             {currentAnswer.trim().length > 0 && (
               <div className="flex items-center gap-1.5 mt-2 text-xs text-teal-600">
                 <CheckCircle className="w-3.5 h-3.5" />
-                <span>Đã hoàn thành</span>
+                <span>
+                  {wordCount >= MIN_WORDS_REQUIRED
+                    ? 'Đã hoàn thành'
+                    : `Cần thêm ${MIN_WORDS_REQUIRED - wordCount} từ để đủ điều kiện nộp`}
+                </span>
               </div>
             )}
           </div>
@@ -353,17 +374,24 @@ function WritingQuestionContent() {
           </div>
 
           {isLast ? (
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 transition-colors shadow-lg shadow-primary/20"
-            >
-              {isSubmitting ? (
-                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              ) : (
-                <>Nộp bài <Sparkles className="w-3.5 h-3.5" /></>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || invalidPromptCount > 0}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 transition-colors shadow-lg shadow-primary/20"
+              >
+                {isSubmitting ? (
+                  <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <>Nộp bài <Sparkles className="w-3.5 h-3.5" /></>
+                )}
+              </button>
+              {invalidPromptCount > 0 && (
+                <p className="text-[11px] text-red-500">
+                  Cần tối thiểu {MIN_WORDS_REQUIRED} từ cho mỗi câu để nộp bài.
+                </p>
               )}
-            </button>
+            </div>
           ) : (
             <button
               onClick={handleNext}
@@ -387,7 +415,7 @@ function WritingQuestionContent() {
               <button onClick={() => setShowExitDialog(false)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                 Tiếp tục làm
               </button>
-              <button onClick={() => router.back()} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors">
+              <button onClick={() => router.push('/home')} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors">
                 Thoát
               </button>
             </div>

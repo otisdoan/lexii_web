@@ -279,10 +279,25 @@ export default function WritingResultPage() {
         const answer = (data.userAnswers[prompt.id] || '').trim();
         if (!answer) continue;
         try {
+          const taskType = mapWritingTaskType(prompt.part_number);
+          const hintWords = Array.isArray(prompt.hint_words)
+            ? prompt.hint_words
+            : typeof prompt.hint_words === 'string'
+              ? prompt.hint_words.split(',').map((w) => w.trim()).filter(Boolean)
+              : [];
+
+          const gradingPrompt = taskType === 'write_sentence_picture'
+            ? [
+              prompt.prompt || '',
+              `keywords: ${hintWords.slice(0, 2).join(', ')}`,
+              `image_context: ${prompt.title || ''}`,
+            ].filter(Boolean).join('\n')
+            : (prompt.prompt || prompt.passage_text || prompt.title || '');
+
           out[prompt.id] = await gradeAiAnswer({
             mode: 'writing',
-            taskType: mapWritingTaskType(prompt.part_number),
-            prompt: prompt.prompt || prompt.passage_text || prompt.title || '',
+            taskType,
+            prompt: gradingPrompt,
             answer,
           });
         } catch {
@@ -314,7 +329,15 @@ export default function WritingResultPage() {
             partNumber: data.partNumber,
             promptId: prompt.id,
             promptTitle: prompt.title || '',
-            promptContent: prompt.prompt || prompt.passage_text || '',
+            promptContent: JSON.stringify({
+              prompt: prompt.prompt || '',
+              passageText: prompt.passage_text || '',
+              passageSubject: prompt.passage_subject || '',
+              imageUrl: prompt.image_url || '',
+              modelAnswer: prompt.model_answer || '',
+              displayText: prompt.prompt || prompt.passage_text || '',
+              title: prompt.title || '',
+            }),
             userAnswer: answer,
             gradeResult,
           });

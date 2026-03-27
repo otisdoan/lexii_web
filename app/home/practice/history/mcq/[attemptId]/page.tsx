@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, Circle, XCircle } from 'lucide-react';
-import { getAttemptDetail, getListeningReadingPracticeAttemptDetail } from '@/lib/api';
+import { getListeningReadingPracticeAttemptDetail } from '@/lib/api';
 import type { AttemptDetail } from '@/lib/types';
 
 function formatDateTime(value: string): string {
@@ -18,20 +18,16 @@ function formatDateTime(value: string): string {
   });
 }
 
-export default function AttemptHistoryDetailPage() {
+export default function PracticeMcqHistoryDetailPage() {
   const router = useRouter();
   const params = useParams<{ attemptId: string }>();
-  const searchParams = useSearchParams();
-  const practiceHistoryId = searchParams.get('practiceHistoryId');
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<AttemptDetail | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const data = practiceHistoryId
-          ? await getListeningReadingPracticeAttemptDetail(practiceHistoryId)
-          : await getAttemptDetail(params.attemptId);
+        const data = await getListeningReadingPracticeAttemptDetail(params.attemptId);
         setDetail(data);
       } catch {
         setDetail(null);
@@ -40,7 +36,7 @@ export default function AttemptHistoryDetailPage() {
       }
     }
     void load();
-  }, [params.attemptId, practiceHistoryId]);
+  }, [params.attemptId]);
 
   const total = detail?.questions.length || 0;
   const answeredCount = useMemo(() => {
@@ -64,9 +60,9 @@ export default function AttemptHistoryDetailPage() {
   if (!detail) {
     return (
       <div className="px-4 py-6">
-        <button onClick={() => router.back()} className="mb-4 text-primary font-medium">← Quay lại</button>
+        <button onClick={() => router.push('/home/practice/history')} className="mb-4 text-primary font-medium">← Quay lại</button>
         <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
-          <p className="font-semibold text-slate-700">Không tìm thấy bài làm</p>
+          <p className="font-semibold text-slate-700">Không tìm thấy bài luyện tập</p>
           <p className="text-sm text-slate-500 mt-1">Bài làm có thể đã bị xóa hoặc bạn không có quyền xem.</p>
         </div>
       </div>
@@ -76,10 +72,10 @@ export default function AttemptHistoryDetailPage() {
   return (
     <div className="pb-20 lg:pb-8">
       <div className="bg-primary px-4 py-4 rounded-md flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+        <button onClick={() => router.push('/home/practice/history')} className="p-2 hover:bg-white/10 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
-        <h1 className="text-lg font-semibold text-white flex-1 text-center pr-10">Chi tiết bài làm</h1>
+        <h1 className="text-lg font-semibold text-white flex-1 text-center pr-10">Chi tiết luyện tập</h1>
       </div>
 
       <div className="py-4 space-y-4">
@@ -102,15 +98,6 @@ export default function AttemptHistoryDetailPage() {
           </div>
           <p className="text-xs text-slate-500 mt-2">Đã trả lời: {answeredCount}/{total} câu</p>
         </div>
-
-        {detail.questions.length === 0 && (
-          <div className="bg-white rounded-2xl p-6 text-center shadow-sm border border-slate-100">
-            <p className="font-semibold text-slate-700">Chưa tải được danh sách câu hỏi</p>
-            <p className="text-sm text-slate-500 mt-1">
-              Bản ghi này có thể được tạo trước khi hệ thống lưu chi tiết câu luyện tập.
-            </p>
-          </div>
-        )}
 
         {detail.questions.map((q, idx) => {
           const selectedOptionId = detail.selectedOptionIdByQuestionId[q.id];
@@ -180,7 +167,7 @@ export default function AttemptHistoryDetailPage() {
 
                 {!isAnswered && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                    Bạn chưa trả lời câu này trong lần làm bài.
+                    Bạn chưa trả lời câu này trong lần luyện tập này.
                   </div>
                 )}
               </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -305,7 +306,7 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
     <div className="pb-20 lg:pb-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+        <button onClick={() => router.replace('/home')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
           <ArrowLeft className="w-5 h-5 text-slate-600" />
         </button>
         <div className="flex items-center gap-3">
@@ -356,7 +357,15 @@ export default function PracticeDetailPage({ params }: { params: Promise<{ skill
       </div>
 
       {/* Parts list */}
-      <h3 className="text-lg font-bold text-slate-800 mb-4">Danh sách Part</h3>
+      <div className="flex items-end justify-between mb-4">
+        <h3 className="text-lg font-bold text-slate-800">Danh sách Part</h3>
+        <Link
+          href={`/home/practice/history?filter=${encodeURIComponent(skill)}`}
+          className="text-sm font-semibold text-primary hover:underline"
+        >
+          Lịch sử luyện tập
+        </Link>
+      </div>
       <div className="space-y-3">
         {loading ? (
           [...Array(4)].map((_, i) => (

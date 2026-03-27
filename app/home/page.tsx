@@ -13,26 +13,22 @@ import {
   TrendingUp,
   Zap,
   BookMarked,
-  Star,
   FileText,
   HelpCircle,
   Lock,
-  CheckCircle,
-  ThumbsUp,
-  ThumbsDown,
-  Mic2,
-  PenLine,
 } from 'lucide-react';
 import {
+  getCurrentUser,
   getCurrentUserRole,
   getFullTests,
-  getMiniTests,
+  getListeningReadingPracticeHistory,
+  getPracticeHistory,
   getUserAttemptHistory,
-  getRecentPracticeHistory,
   getSavedVocabularyCount,
   getSavedGrammarCount,
 } from '@/lib/api';
 import type { TestModel, AttemptHistoryItem, PracticeHistoryItem } from '@/lib/types';
+import ToeicLearningDashboard from './components/ToeicLearningDashboard';
 
 const skills = [
   {
@@ -94,35 +90,27 @@ function getScoreColor(score: number): string {
   return 'text-red-500';
 }
 
-function getScoreLabel(score: number): string {
-  if (score >= 85) return 'Tốt';
-  if (score >= 65) return 'Khá';
-  return 'Cần cải thiện';
-}
-
 export default function HomePage() {
   const [fullTests, setFullTests] = useState<TestModel[]>([]);
-  const [miniTests, setMiniTests] = useState<TestModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
 
   const [examHistory, setExamHistory] = useState<AttemptHistoryItem[]>([]);
-  const [practiceHistory, setPracticeHistory] = useState<PracticeHistoryItem[]>([]);
+  const [speakingHistory, setSpeakingHistory] = useState<PracticeHistoryItem[]>([]);
+  const [activityTimestamps, setActivityTimestamps] = useState<string[]>([]);
   const [vocabCount, setVocabCount] = useState(0);
   const [grammarCount, setGrammarCount] = useState(0);
 
   useEffect(() => {
     async function load() {
       try {
-        const [ft, mt, role, vocab, grammar] = await Promise.all([
+        const [ft, role, vocab, grammar] = await Promise.all([
           getFullTests(),
-          getMiniTests(),
           getCurrentUserRole(),
           getSavedVocabularyCount(),
           getSavedGrammarCount(),
         ]);
         setFullTests(ft);
-        setMiniTests(mt);
         setIsPremiumUser(role === 'premium' || role === 'admin');
         setVocabCount(vocab);
         setGrammarCount(grammar);
@@ -138,20 +126,44 @@ export default function HomePage() {
   useEffect(() => {
     async function loadHistory() {
       try {
-        const [exams, practices] = await Promise.all([
-          getUserAttemptHistory(5),
-          getRecentPracticeHistory(5),
+        const [exams, user] = await Promise.all([
+          getUserAttemptHistory(8),
+          getCurrentUser(),
         ]);
+
+        let speakingRows: PracticeHistoryItem[] = [];
+        let allPracticeRows: PracticeHistoryItem[] = [];
+        let lrPracticeRows: Array<{ created_at: string }> = [];
+        if (user) {
+          const [allRows, lrRows] = await Promise.all([
+            getPracticeHistory(user.id),
+            getListeningReadingPracticeHistory(100),
+          ]);
+          allPracticeRows = allRows;
+          lrPracticeRows = lrRows;
+          speakingRows = allRows.filter((row) => row.mode === 'speaking');
+        }
+
+        const mergedActivityTimestamps = [
+          ...exams.map((row) => row.submittedAt),
+          ...allPracticeRows.map((row) => row.created_at),
+          ...lrPracticeRows.map((row) => row.created_at),
+        ];
+
         setExamHistory(exams);
-        setPracticeHistory(practices);
+        setSpeakingHistory(speakingRows);
+        setActivityTimestamps(mergedActivityTimestamps);
       } catch {
         // silently handle
+        setExamHistory([]);
+        setSpeakingHistory([]);
+        setActivityTimestamps([]);
       }
     }
     loadHistory();
   }, []);
 
-  const hasAnyHistory = examHistory.length > 0 || practiceHistory.length > 0;
+  const hasAnyHistory = examHistory.length > 0;
 
   return (
     <div className="space-y-8 pb-20 lg:pb-8">
@@ -199,7 +211,16 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Exam Sections - Side by Side on Web */}
+      {/* Dashboard */}
+      <section>
+        <ToeicLearningDashboard
+          examHistory={examHistory}
+          speakingHistory={speakingHistory}
+          activityTimestamps={activityTimestamps}
+        />
+      </section>
+
+      {/* Full Tests & History */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Full Tests */}
         <section>
@@ -252,55 +273,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Mini Tests */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800">Mini Test</h3>
-            <Link href="/home/exam" className="text-primary text-sm font-medium flex items-center gap-1 hover:underline">
-              Xem thêm <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {loading ? (
-              [...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-slate-100 p-4 animate-pulse">
-                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-slate-100 rounded w-1/2" />
-                </div>
-              ))
-            ) : miniTests.length > 0 ? (
-              miniTests.slice(0, 4).map(test => (
-                <Link
-                  key={test.id}
-                  href={test.is_premium && !isPremiumUser
-                    ? '/home/upgrade'
-                    : `/home/exam/test-start?testId=${test.id}&title=${encodeURIComponent(test.title)}&duration=${test.duration}&total=${test.total_questions}&isPremium=${test.is_premium ? '1' : '0'}`}
-                  className="flex items-center gap-4 bg-white rounded-xl border border-slate-100 p-4 hover:shadow-sm hover:border-primary/20 transition-all group"
-                >
-                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
-                    <Star className="w-6 h-6 text-indigo-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-slate-800 text-sm truncate">{test.title}</h4>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{test.duration} phút</span>
-                      <span className="flex items-center gap-1"><HelpCircle className="w-3.5 h-3.5" />{test.total_questions} câu</span>
-                    </div>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
-                <Target className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-500">Chưa có mini test nào</p>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      {/* History & Notebook */}
-      <div className="grid md:grid-cols-2 gap-6">
         {/* Test History */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -318,46 +290,6 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-              {/* Practice History Items */}
-              {practiceHistory.length > 0 && (
-                <div className="divide-y divide-slate-50">
-                  {practiceHistory.map(item => (
-                    <Link
-                      key={item.id}
-                      href={item.mode === 'speaking' ? '/home/practice/speaking' : '/home/practice/writing'}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                        item.mode === 'speaking' ? 'bg-orange-50' : 'bg-purple-50'
-                      }`}>
-                        {item.mode === 'speaking'
-                          ? <Mic2 className={`w-4 h-4 ${item.mode === 'speaking' ? 'text-orange-500' : ''}`} />
-                          : <PenLine className={`w-4 h-4 ${item.mode === 'writing' ? 'text-purple-500' : ''}`} />
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">{item.prompt_title}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {item.mode === 'speaking' ? 'Luyện nói' : 'Luyện viết'} · Part {item.part_number}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {item.ai_score !== null ? (
-                          <div>
-                            <p className={`text-sm font-bold ${getScoreColor(item.ai_score)}`}>
-                              {item.ai_score}/5
-                            </p>
-                            <p className="text-xs text-slate-400">{formatDate(item.created_at)}</p>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400">{formatDate(item.created_at)}</p>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-
               {/* Exam History Items */}
               {examHistory.length > 0 && (
                 <div className="divide-y divide-slate-50">
@@ -392,31 +324,32 @@ export default function HomePage() {
           )}
         </section>
 
-        {/* Notebook */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800">Sổ tay</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              href="/home/vocabulary?tab=learn&saved=1"
-              className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
-            >
-              <BookMarked className="w-8 h-8 text-primary mb-2" />
-              <h4 className="font-semibold text-slate-800 text-sm">Từ vựng</h4>
-              <p className="text-xs text-slate-500 mt-1">{vocabCount > 0 ? `${vocabCount} từ đã lưu` : 'Chưa có từ vựng'}</p>
-            </Link>
-            <Link
-              href="/home/grammar?saved=1"
-              className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
-            >
-              <HelpCircle className="w-8 h-8 text-orange-500 mb-2" />
-              <h4 className="font-semibold text-slate-800 text-sm">Ngữ pháp</h4>
-              <p className="text-xs text-slate-500 mt-1">{grammarCount > 0 ? `${grammarCount} ngữ pháp đã lưu` : 'Chưa có ngữ pháp'}</p>
-            </Link>
-          </div>
-        </section>
       </div>
+
+      {/* Notebook */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-800">Sổ tay</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href="/home/vocabulary?tab=learn&saved=1"
+            className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
+          >
+            <BookMarked className="w-8 h-8 text-primary mb-2" />
+            <h4 className="font-semibold text-slate-800 text-sm">Từ vựng</h4>
+            <p className="text-xs text-slate-500 mt-1">{vocabCount > 0 ? `${vocabCount} từ đã lưu` : 'Chưa có từ vựng'}</p>
+          </Link>
+          <Link
+            href="/home/grammar?saved=1"
+            className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-sm transition-shadow cursor-pointer group"
+          >
+            <HelpCircle className="w-8 h-8 text-orange-500 mb-2" />
+            <h4 className="font-semibold text-slate-800 text-sm">Ngữ pháp</h4>
+            <p className="text-xs text-slate-500 mt-1">{grammarCount > 0 ? `${grammarCount} ngữ pháp đã lưu` : 'Chưa có ngữ pháp'}</p>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

@@ -169,6 +169,20 @@ export interface PracticeHistoryItem {
   created_at: string;
 }
 
+export interface PracticeListeningReadingHistoryItem {
+  id: string;
+  user_id: string;
+  test_id: string | null;
+  section: 'listening' | 'reading';
+  part_number: number;
+  question_ids: string[];
+  question_count: number;
+  answered_count: number;
+  correct_count: number;
+  score: number;
+  created_at: string;
+}
+
 // ========== Practice ==========
 export interface PracticePartData {
   partId: string;
@@ -207,6 +221,35 @@ export interface AiGradeResult {
   feedback: string;
   importantWords: string[];
   suggestedAnswer: string;
+  part1ReadAloud?: {
+    overallScore: number;
+    pronunciation: number;
+    fluency: number;
+    accuracy: number;
+    spokenFeedback: string;
+    detailedFeedback: string;
+    mistakes: Array<{
+      word: string;
+      issue: 'mispronunciation' | 'missing' | 'extra';
+      explanation: string;
+    }>;
+    suggestions: string[];
+  };
+  partSpeaking?: {
+    taskType: string;
+    overallScore: number;
+    criteriaScores: Record<string, number>;
+    spokenFeedback: string;
+    detailedFeedback: string;
+    mistakes: Array<{
+      type: 'content' | 'grammar' | 'vocabulary' | 'fluency' | 'pronunciation' | 'logic';
+      text: string;
+      issue?: string;
+      suggestion?: string;
+    }>;
+    improvedVocabulary?: string[];
+    suggestions: string[];
+  };
 }
 
 // ========== Subscription / Transactions ==========

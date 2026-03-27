@@ -8,6 +8,7 @@ import type {
   WritingPromptModel,
   SpeakingPromptModel,
   PracticeHistoryItem,
+  PracticeListeningReadingHistoryItem,
   PracticePartData,
   AiGradeResult,
   AttemptHistoryItem,
@@ -44,6 +45,7 @@ export interface ConfirmPaymentResponse {
 }
 
 const QUESTIONS_PAGE_SIZE = 1000;
+const MAX_READING_PART5_QUESTIONS = 200;
 const MAX_HEAVY_READING_QUESTIONS = 300;
 
 type QuestionBaseRow = {
@@ -431,8 +433,10 @@ export async function submitAttempt(
     is_correct: a.is_correct,
   }));
 
-  const { error: ansError } = await supabase.from('answers').insert(answerRows);
-  if (ansError) throw ansError;
+  if (answerRows.length > 0) {
+    const { error: ansError } = await supabase.from('answers').insert(answerRows);
+    if (ansError) throw ansError;
+  }
 
   const { data: test } = await supabase
     .from('tests')
@@ -917,9 +921,11 @@ export async function getQuestionsByReadingPartNumber(
 
   const partIds = (parts as Array<{ id: string }>).map((p) => p.id);
   const limit =
-    partNumber === 6 || partNumber === 7
-      ? MAX_HEAVY_READING_QUESTIONS
-      : undefined;
+    partNumber === 5
+      ? MAX_READING_PART5_QUESTIONS
+      : (partNumber === 6 || partNumber === 7)
+        ? MAX_HEAVY_READING_QUESTIONS
+        : undefined;
   const data = await fetchQuestionsByPartIdsLight(partIds, limit);
   if (!data.length) return [];
 
@@ -1153,11 +1159,15 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
     const rawTotal = partsRows
       .filter((p: { part_number: number }) => p.part_number === partNumber)
       .reduce((sum, p) => sum + (questionCountByPartId[p.id] || 0), 0);
-    const total =
-      (partNumber === 6 || partNumber === 7) &&
-      rawTotal > MAX_HEAVY_READING_QUESTIONS
-        ? MAX_HEAVY_READING_QUESTIONS
-        : rawTotal;
+    const maxForPart =
+      partNumber === 5
+        ? MAX_READING_PART5_QUESTIONS
+        : (partNumber === 6 || partNumber === 7)
+          ? MAX_HEAVY_READING_QUESTIONS
+          : undefined;
+    const total = maxForPart && rawTotal > maxForPart
+      ? maxForPart
+      : rawTotal;
     const stats = statsByPartNumber[partNumber];
     return {
       partId,
@@ -1545,6 +1555,145 @@ export async function getUserAttemptHistory(limit = 50): Promise<AttemptHistoryI
     answeredCount: statsByAttemptId[a.id]?.answered || 0,
     correctCount: statsByAttemptId[a.id]?.correct || 0,
   }));
+}
+
+export async function getPracticeAttemptHistory(limit = 50): Promise<AttemptHistoryItem[]> {
+  const rows = await getListeningReadingPracticeHistory(limit);
+  return rows.map((row) => ({
+    id: row.id,
+    testId: row.test_id || '',
+    testTitle: `${row.section === 'listening' ? 'Listening' : 'Reading'} Part ${row.part_number} - ${row.question_count} câu`,
+    score: row.score,
+    submittedAt: row.created_at,
+    answeredCount: row.answered_count,
+    correctCount: row.correct_count,
+  }));
+}
+
+export async function saveListeningReadingPracticeHistory(params: {
+  userId: string;
+  testId?: string | null;
+  section: 'listening' | 'reading';
+  partNumber: number;
+  questionIds: string[];
+  questionCount: number;
+  answeredCount: number;
+  correctCount: number;
+  score: number;
+  answers: Array<{ questionId: string; selectedOptionId: string; isCorrect: boolean }>;
+}): Promise<string> {
+  const { data: attemptRow, error: attemptError } = await supabase
+    .from('practice_mcq_attempts')
+    .insert({
+      user_id: params.userId,
+      test_id: params.testId ?? null,
+      section: params.section,
+      part_number: params.partNumber,
+      question_ids: params.questionIds,
+      question_count: params.questionCount,
+      answered_count: params.answeredCount,
+      correct_count: params.correctCount,
+      score: params.score,
+    })
+    .select('id')
+    .single();
+  if (attemptError) throw attemptError;
+
+  const answerRows = params.answers.map((answer) => ({
+    attempt_id: attemptRow.id,
+    question_id: answer.questionId,
+    selected_option_id: answer.selectedOptionId,
+    is_correct: answer.isCorrect,
+  }));
+
+  if (answerRows.length > 0) {
+    const { error: answersError } = await supabase
+      .from('practice_mcq_answers')
+      .insert(answerRows);
+    if (answersError) throw answersError;
+  }
+
+  return attemptRow.id;
+}
+
+export async function getListeningReadingPracticeHistory(
+  limit = 100,
+  section?: 'listening' | 'reading',
+): Promise<PracticeListeningReadingHistoryItem[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  let query = supabase
+    .from('practice_mcq_attempts')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (section) {
+    query = query.eq('section', section);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as PracticeListeningReadingHistoryItem[];
+}
+
+export async function getListeningReadingPracticeAttemptDetail(
+  attemptId: string,
+): Promise<AttemptDetail | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const { data: attemptRow, error: attemptError } = await supabase
+    .from('practice_mcq_attempts')
+    .select('*')
+    .eq('id', attemptId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (attemptError) throw attemptError;
+  if (!attemptRow) return null;
+
+  const row = attemptRow as PracticeListeningReadingHistoryItem;
+  const questionIds = Array.isArray(row.question_ids) ? row.question_ids : [];
+
+  const questions = questionIds.length ? await getQuestionsByIds(questionIds) : [];
+
+  const selectedOptionIdByQuestionId: Record<string, string> = {};
+  const { data: answerRows, error: answersError } = await supabase
+      .from('practice_mcq_answers')
+      .select('question_id,selected_option_id,is_correct')
+      .eq('attempt_id', row.id);
+  if (answersError) throw answersError;
+
+  for (const answer of (answerRows || []) as Array<{ question_id: string; selected_option_id: string; is_correct: boolean | null }>) {
+    selectedOptionIdByQuestionId[answer.question_id] = answer.selected_option_id;
+  }
+
+  const testTitle = `Luyện tập ${row.section === 'listening' ? 'Listening' : 'Reading'} Part ${row.part_number}`;
+
+  const questionPositionById: Record<string, number> = {};
+  questionIds.forEach((id, index) => {
+    questionPositionById[id] = index;
+  });
+
+  const orderedQuestions = [...questions].sort((a, b) => {
+    const aIdx = questionPositionById[a.id] ?? Number.MAX_SAFE_INTEGER;
+    const bIdx = questionPositionById[b.id] ?? Number.MAX_SAFE_INTEGER;
+    if (aIdx !== bIdx) return aIdx - bIdx;
+    return a.order_index - b.order_index;
+  });
+
+  return {
+    id: row.id,
+    testId: row.test_id || '',
+    testTitle,
+    score: row.score,
+    submittedAt: row.created_at,
+    questions: orderedQuestions,
+    selectedOptionIdByQuestionId,
+    correctCount: row.correct_count,
+  };
 }
 
 export async function getAttemptDetail(attemptId: string): Promise<AttemptDetail | null> {

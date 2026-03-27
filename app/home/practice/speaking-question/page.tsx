@@ -80,7 +80,7 @@ function SpeakingQuestionContent() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
+  const [transcribingByPrompt, setTranscribingByPrompt] = useState<Record<string, boolean>>({});
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -90,6 +90,8 @@ function SpeakingQuestionContent() {
   const speechCleanupRef = useRef<(() => void) | null>(null);
 
   const questionLimit = Number(searchParams.get('questionLimit') || '0');
+  const transcribingCount = Object.keys(transcribingByPrompt).length;
+  const transcribing = transcribingCount > 0;
 
   useEffect(() => {
     async function init() {
@@ -140,8 +142,12 @@ function SpeakingQuestionContent() {
   // Transcribe audio blob using Whisper API
   // ============================================================
   const transcribeBlob = useCallback((promptId: string, blob: Blob) => {
-    setTranscribing(true);
-    setTranscribedTexts(prev => ({ ...prev, [promptId]: 'Đang chuyển giọng nói thành văn bản...' }));
+    setTranscribingByPrompt((prev) => ({ ...prev, [promptId]: true }));
+    setTranscribedTexts((prev) => {
+      const next = { ...prev };
+      delete next[promptId];
+      return next;
+    });
 
     const formData = new FormData();
     formData.append('file', blob, 'audio.webm');
@@ -149,7 +155,6 @@ function SpeakingQuestionContent() {
     fetch('/api/transcribe', { method: 'POST', body: formData })
       .then(res => res.json())
       .then(data => {
-        setTranscribing(false);
         if (data.text) {
           console.log(`[SPEAKING] Transcribed text for prompt ${promptId}:`, data.text);
           setTranscribedTexts(prev => ({ ...prev, [promptId]: data.text }));
@@ -160,8 +165,14 @@ function SpeakingQuestionContent() {
       })
       .catch(err => {
         console.error('[SPEAKING] Transcribe error:', err);
-        setTranscribing(false);
         setTranscribedTexts(prev => ({ ...prev, [promptId]: '[Lỗi kết nối, vui lòng thử lại]' }));
+      })
+      .finally(() => {
+        setTranscribingByPrompt((prev) => {
+          const next = { ...prev };
+          delete next[promptId];
+          return next;
+        });
       });
   }, []);
 
@@ -169,6 +180,11 @@ function SpeakingQuestionContent() {
   const currentAudioUrl = currentPrompt ? audioUrls[currentPrompt.id] : '';
   const isLast = currentIndex === prompts.length - 1;
   const recordedCount = Object.keys(audioUrls).filter(id => audioUrls[id]).length;
+  const hasAnyRecording = recordedCount > 0;
+  const normalizedCurrentTaskType = String(currentPrompt?.taskType || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  const isDescribePicture = partNumber === 2 || normalizedCurrentTaskType === 'describepicture';
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -289,7 +305,30 @@ function SpeakingQuestionContent() {
   };
 
   const handleSubmit = () => {
-    if (isRecording) stopRecording();
+    if (!hasAnyRecording) {
+      setRecordingError('Bạn chưa thu âm câu nào. Vui lòng thu âm trước khi nộp bài.');
+      return;
+    }
+
+    if (isRecording) {
+      stopRecording();
+      setRecordingError('Đã dừng thu âm. Vui lòng đợi hệ thống nhận diện xong rồi bấm Nộp bài lại.');
+      return;
+    }
+
+    if (transcribing) {
+      setRecordingError(`Đang nhận diện giọng nói cho ${transcribingCount} câu. Vui lòng đợi hoàn tất.`);
+      return;
+    }
+
+    const hasLegacyPlaceholder = Object.values(transcribedTexts).some(
+      (text) => text?.trim() === 'Đang chuyển giọng nói thành văn bản...'
+    );
+    if (hasLegacyPlaceholder) {
+      setRecordingError('Hệ thống vẫn đang xử lý nhận diện giọng nói. Vui lòng đợi thêm vài giây.');
+      return;
+    }
+
     setIsSubmitting(true);
     const submissionAnswers: Record<string, string> = {};
     for (const p of prompts) {
@@ -380,13 +419,15 @@ function SpeakingQuestionContent() {
 
           {/* Image */}
           {currentPrompt.imageUrl && (
-            <div className="border-b border-slate-100">
+            <div className={`border-b border-slate-100 ${isDescribePicture ? 'bg-slate-50 p-3' : ''}`}>
               <Image
                 src={currentPrompt.imageUrl}
                 alt="Hình minh họa"
                 width={1200}
                 height={700}
-                className="w-full h-52 object-cover"
+                className={isDescribePicture
+                  ? 'w-full h-[320px] md:h-[460px] object-contain rounded-xl bg-white'
+                  : 'w-full h-52 object-cover'}
                 priority
               />
             </div>
@@ -428,7 +469,9 @@ function SpeakingQuestionContent() {
                   <p className="text-xs text-red-500 font-medium">{formatTime(recordingTime)}</p>
                 )}
                 {transcribing && (
-                  <p className="text-xs text-blue-500 font-medium animate-pulse">Đang nhận diện giọng nói...</p>
+                  <p className="text-xs text-blue-500 font-medium animate-pulse">
+                    Đang nhận diện giọng nói... ({transcribingCount} câu)
+                  </p>
                 )}
               </div>
             </div>
@@ -504,7 +547,7 @@ function SpeakingQuestionContent() {
           {isLast ? (
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isRecording || transcribing || !hasAnyRecording}
               className="flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 transition-colors shadow-lg shadow-primary/20"
             >
               {isSubmitting ? (
@@ -555,7 +598,13 @@ function SpeakingQuestionContent() {
               <button onClick={() => setShowExitDialog(false)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                 Tiếp tục làm
               </button>
-              <button onClick={() => router.back()} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors">
+              <button
+                onClick={() => {
+                  setShowExitDialog(false);
+                  router.push('/home');
+                }}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors"
+              >
                 Thoát
               </button>
             </div>

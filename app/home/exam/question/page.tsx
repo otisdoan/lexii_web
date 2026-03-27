@@ -26,6 +26,7 @@ import {
   getQuestionsByTestId,
   getTestById,
   getTestParts,
+  saveListeningReadingPracticeHistory,
   saveListeningPracticeTracking,
   submitAttempt,
 } from '@/lib/api';
@@ -301,8 +302,14 @@ function ExamQuestionContent() {
           loadedQuestions = await getQuestionsByIds(unansweredIds);
         } else if (practiceMode && partNumber >= 1 && partNumber <= 4) {
           loadedQuestions = await getQuestionsByListeningPartNumber(partNumber);
+          if (!loadedQuestions.length && partId) {
+            loadedQuestions = await getQuestionsByPartId(partId);
+          }
         } else if (practiceMode && partNumber >= 5) {
           loadedQuestions = await getQuestionsByReadingPartNumber(partNumber);
+          if (!loadedQuestions.length && partId) {
+            loadedQuestions = await getQuestionsByPartId(partId);
+          }
         } else if (practiceMode && partId) {
           loadedQuestions = await getQuestionsByPartId(partId);
         } else {
@@ -481,12 +488,31 @@ function ExamQuestionContent() {
       });
 
       const user = await getCurrentUser();
-      if (user && answerRows.length > 0) {
+      if (user) {
         try {
-          await submitAttempt(user.id, testId, correct, answerRows);
-          await saveListeningPracticeTracking(questions, userAnswers);
-        } catch {
-          // keep UX smooth even when saving fails
+          await saveListeningReadingPracticeHistory({
+            userId: user.id,
+            testId,
+            section: partNumber >= 5 ? 'reading' : 'listening',
+            partNumber,
+            questionIds: questions.map((q) => q.id),
+            questionCount: questions.length,
+            answeredCount: answerRows.length,
+            correctCount: correct,
+            score: correct,
+            answers: answerRows.map((answer) => ({
+              questionId: answer.question_id,
+              selectedOptionId: answer.option_id,
+              isCorrect: answer.is_correct,
+            })),
+          });
+
+          if (answerRows.length > 0) {
+            await saveListeningPracticeTracking(questions, userAnswers);
+          }
+        } catch (error) {
+          // Keep UX smooth but log save issues for debugging.
+          console.error('Failed to save practice history:', error);
         }
       }
 

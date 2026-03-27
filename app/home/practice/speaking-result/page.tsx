@@ -12,6 +12,7 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { gradeAiAnswer, getCurrentUser, savePracticeHistory } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import AudioPlayer from '@/app/components/AudioPlayer';
 import type { AiGradeResult } from '@/lib/types';
 
@@ -22,6 +23,7 @@ type SpeakingPrompt = {
   passage?: string;
   prompt: string;
   imageUrl?: string;
+  modelAnswer?: string;
 };
 
 type SpeakingResultData = {
@@ -31,6 +33,46 @@ type SpeakingResultData = {
   userAnswers: Record<string, string>;
   transcribedTexts?: Record<string, string>;
 };
+
+async function uploadPracticeAudio(userId: string, promptId: string, audioUrl: string): Promise<string> {
+  if (!audioUrl) return '';
+
+  try {
+    const res = await fetch(audioUrl);
+    const blob = await res.blob();
+    if (!blob.size) return '';
+
+    const ext = blob.type.includes('mpeg') ? 'mp3' : blob.type.includes('wav') ? 'wav' : 'webm';
+    const fileName = `${userId}/${Date.now()}-${promptId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('practice-audios')
+      .upload(fileName, blob, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: blob.type || 'audio/webm',
+      });
+
+    if (uploadError) return '';
+
+    const { data } = supabase.storage.from('practice-audios').getPublicUrl(fileName);
+    return data.publicUrl || '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeTranscribedText(raw: string | undefined): string {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+
+  const lower = text.toLowerCase();
+  const isPending = lower.includes('đang chuyển giọng nói thành văn bản');
+  const isError = lower.startsWith('[lỗi') || lower.startsWith('lỗi');
+
+  if (isPending || isError) return '';
+  return text;
+}
 
 const TASK_LABELS: Record<string, string> = {
   pronunciation: 'Phát âm',
@@ -44,6 +86,16 @@ const TASK_LABELS: Record<string, string> = {
   content: 'Content',
   relevance: 'Relevance',
   completeness: 'Completeness',
+  content_coverage: 'Bao quát nội dung',
+  detail_accuracy: 'Độ chính xác chi tiết',
+  organization: 'Tổ chức ý',
+  delivery: 'Phát âm & lưu loát',
+  direct_answer: 'Trả lời trực tiếp',
+  supporting_details: 'Ý hỗ trợ/ví dụ',
+  language_use: 'Ngôn ngữ sử dụng',
+  information_accuracy: 'Độ chính xác thông tin',
+  opinion_clarity: 'Độ rõ quan điểm',
+  reasons_examples: 'Lý do & ví dụ',
   'task response': 'Nội dung',
 };
 
@@ -60,6 +112,30 @@ function ScoreBar({ score, label }: { score: number; label: string }) {
   );
 }
 
+function isReadAloudTaskType(taskType: string): boolean {
+  const normalized = String(taskType || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return (
+    normalized === 'readaloud' ||
+    normalized === 'part1readaloud' ||
+    normalized === 'readaloudpart1'
+  );
+}
+
+function isPart2To5SpeakingTask(taskType: string): boolean {
+  const normalized = String(taskType || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return (
+    normalized === 'describepicture' ||
+    normalized === 'respondquestions' ||
+    normalized === 'respondinformation' ||
+    normalized === 'expressopinion' ||
+    normalized === 'proposesolution'
+  );
+}
+
 function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }: {
   prompt: SpeakingPrompt;
   audioUrl: string;
@@ -68,6 +144,15 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
   transcribedText?: string;
 }) {
   const [expanded, setExpanded] = useState(index === 0);
+  const isPart1ReadAloud = isReadAloudTaskType(prompt.taskType);
+  const isPart2To5 = isPart2To5SpeakingTask(prompt.taskType);
+  const part1 = isPart1ReadAloud ? result?.part1ReadAloud : undefined;
+  const partSpeaking = isPart2To5 ? result?.partSpeaking : undefined;
+  const partSpeakingScore = partSpeaking?.overallScore ?? Math.round((result?.overall || 0) * 2);
+  const partSpeakingCriteria = partSpeaking?.criteriaScores || {};
+  const partSpeakingMistakes = partSpeaking?.mistakes || [];
+  const partSpeakingSuggestions = partSpeaking?.suggestions || [];
+  const partSpeakingImprovedVocabulary = partSpeaking?.improvedVocabulary || [];
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -86,8 +171,8 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
         {result ? (
           <div className="flex items-center gap-2 shrink-0">
             <div className="text-right">
-              <span className="text-lg font-bold text-primary">{result.overall}</span>
-              <span className="text-xs text-slate-400">/100</span>
+              <span className="text-lg font-bold text-primary">{part1 ? part1.overallScore : partSpeaking ? partSpeakingScore : result.overall}</span>
+              <span className="text-xs text-slate-400">{part1 ? '/200' : partSpeaking ? '/200' : '/100'}</span>
             </div>
           </div>
         ) : audioUrl ? (
@@ -144,6 +229,153 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
                 <Sparkles className="w-4 h-4 text-amber-500" />
                 <h4 className="text-sm font-bold text-slate-800">Điểm chi tiết</h4>
               </div>
+
+              {/* Part 1 Read Aloud dedicated block */}
+              {part1 && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-700">TOEIC Speaking Score</p>
+                    <p className="text-lg font-black text-primary">{part1.overallScore}/200</p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold text-slate-500">Pronunciation</p>
+                      <p className="text-base font-bold text-slate-800">{part1.pronunciation}/5</p>
+                    </div>
+                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold text-slate-500">Fluency</p>
+                      <p className="text-base font-bold text-slate-800">{part1.fluency}/5</p>
+                    </div>
+                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold text-slate-500">Accuracy</p>
+                      <p className="text-base font-bold text-slate-800">{part1.accuracy}/5</p>
+                    </div>
+                  </div>
+
+                  {part1.spokenFeedback && (
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                      <p className="text-xs font-semibold text-teal-700 mb-1">Spoken feedback</p>
+                      <p className="text-sm text-teal-900">{part1.spokenFeedback}</p>
+                    </div>
+                  )}
+
+                  {part1.detailedFeedback && (
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="text-xs font-semibold text-slate-600 mb-1">Detailed feedback</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{part1.detailedFeedback}</p>
+                    </div>
+                  )}
+
+                  {part1.mistakes && part1.mistakes.length > 0 && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-xs font-semibold text-red-700 mb-2">Detected mistakes</p>
+                      <ul className="space-y-1.5">
+                        {part1.mistakes.map((m, i) => (
+                          <li key={i} className="text-sm text-red-800">
+                            <span className="font-semibold">{m.word}</span>
+                            <span className="mx-1 text-red-400">•</span>
+                            <span className="uppercase text-xs font-bold">{m.issue}</span>
+                            <span className="mx-1 text-red-400">-</span>
+                            <span>{m.explanation}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {part1.suggestions && part1.suggestions.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-700 mb-2">3 suggestions</p>
+                      <ul className="space-y-1.5">
+                        {part1.suggestions.slice(0, 3).map((s, i) => (
+                          <li key={i} className="text-sm text-amber-900">{i + 1}. {s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Part 2-5 dedicated block */}
+              {partSpeaking && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-700">TOEIC Speaking Score</p>
+                    <p className="text-lg font-black text-indigo-700">{partSpeakingScore}/200</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(partSpeakingCriteria).map(([k, v]) => (
+                      <div key={k} className="rounded-lg bg-white border border-indigo-100 px-3 py-2 text-center">
+                        <p className="text-[11px] font-semibold text-slate-500">{TASK_LABELS[k] || k}</p>
+                        <p className="text-base font-bold text-slate-800">{v}/5</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {partSpeaking.spokenFeedback && (
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                      <p className="text-xs font-semibold text-teal-700 mb-1">Spoken feedback</p>
+                      <p className="text-sm text-teal-900">{partSpeaking.spokenFeedback}</p>
+                    </div>
+                  )}
+
+                  {partSpeaking.detailedFeedback && (
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="text-xs font-semibold text-slate-600 mb-1">Detailed feedback</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{partSpeaking.detailedFeedback}</p>
+                    </div>
+                  )}
+
+                  {partSpeakingMistakes.length > 0 && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-xs font-semibold text-red-700 mb-2">Điểm cần cải thiện</p>
+                      <ul className="space-y-1.5">
+                        {partSpeakingMistakes.map((m, i) => (
+                          <li key={i} className="text-sm text-red-800">
+                            <span className="uppercase text-xs font-bold">{m.type}</span>
+                            <span className="mx-1 text-red-400">-</span>
+                            <span>{m.issue || m.text}</span>
+                            {m.suggestion && (
+                              <>
+                                <span className="mx-1 text-red-300">-&gt;</span>
+                                <span className="text-red-900">{m.suggestion}</span>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {partSpeakingImprovedVocabulary.length > 0 && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                      <p className="text-xs font-semibold text-blue-700 mb-2">Vocabulary improvement</p>
+                      <div className="flex flex-wrap gap-2">
+                        {partSpeakingImprovedVocabulary.map((word, i) => (
+                          <span key={i} className="px-2.5 py-1 text-xs font-medium rounded-full border border-blue-200 bg-white text-blue-700">
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {partSpeakingSuggestions.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-700 mb-2">3 suggestions</p>
+                      <ul className="space-y-1.5">
+                        {partSpeakingSuggestions.slice(0, 3).map((s, i) => (
+                          <li key={i} className="text-sm text-amber-900">{i + 1}. {s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!part1 && !partSpeaking && (
               <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                 {/* Overall */}
                 <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
@@ -164,9 +396,10 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
                   <ScoreBar key={k} score={v} label={TASK_LABELS[k] || k} />
                 ))}
               </div>
+              )}
 
               {/* Errors */}
-              {result.errors && result.errors.length > 0 && (
+              {!part1 && !partSpeaking && result.errors && result.errors.length > 0 && (
                 <div className="rounded-xl bg-red-50 border border-red-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <ThumbsDown className="w-4 h-4 text-red-600" />
@@ -184,7 +417,7 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
               )}
 
               {/* Feedback */}
-              {result.feedback && (
+              {!part1 && !partSpeaking && result.feedback && (
                 <div className="rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <ThumbsUp className="w-4 h-4 text-teal-600" />
@@ -195,7 +428,7 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
               )}
 
               {/* Suggested vocabulary */}
-              {result.importantWords && result.importantWords.length > 0 && (
+              {!part1 && !partSpeaking && result.importantWords && result.importantWords.length > 0 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                   <h4 className="text-sm font-bold text-blue-700 mb-2">Từ vựng nên dùng</h4>
                   <div className="flex flex-wrap gap-2">
@@ -209,7 +442,7 @@ function SpeakingResultCard({ prompt, audioUrl, result, index, transcribedText }
               )}
 
               {/* AI suggestion */}
-              {result.suggestedAnswer && (
+              {!part1 && !partSpeaking && result.suggestedAnswer && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Sparkles className="w-4 h-4 text-amber-600" />
@@ -266,15 +499,29 @@ export default function SpeakingResultPage() {
         if (!audioUrl) continue;
 
         // Use transcribed text if available, otherwise fallback
-        const transcribedText = data.transcribedTexts?.[prompt.id] || '';
+        const rawTranscribedText = data.transcribedTexts?.[prompt.id] || '';
+        const transcribedText = normalizeTranscribedText(rawTranscribedText);
 
         console.log('[GRADE-SPEAKING] === GRADING PROMPT ===');
         console.log('[GRADE-SPEAKING] prompt id:', prompt.id);
         console.log('[GRADE-SPEAKING] taskType:', prompt.taskType);
         console.log('[GRADE-SPEAKING] prompt text:', prompt.prompt);
+        console.log('[GRADE-SPEAKING] rawTranscribedText:', JSON.stringify(rawTranscribedText));
         console.log('[GRADE-SPEAKING] transcribedText:', JSON.stringify(transcribedText));
         console.log('[GRADE-SPEAKING] transcribedText length:', transcribedText.length, 'chars');
         console.log('[GRADE-SPEAKING] ==============================');
+
+        if (!transcribedText) {
+          out[prompt.id] = {
+            overall: 0,
+            taskScores: {},
+            errors: ['Chưa có văn bản nhận diện hợp lệ để chấm điểm.'],
+            feedback: 'Hệ thống chưa có transcript hợp lệ. Hãy quay lại câu hỏi, thu âm lại và đợi nhận diện xong rồi nộp.',
+            importantWords: [],
+            suggestedAnswer: '',
+          };
+          continue;
+        }
 
         try {
           out[prompt.id] = await gradeAiAnswer({
@@ -310,8 +557,20 @@ export default function SpeakingResultPage() {
       await Promise.allSettled(
         data.prompts.map(async (prompt) => {
           const gradeResult = out[prompt.id];
-          const promptContent = prompt.passage || prompt.prompt;
-          const transcribedText = data.transcribedTexts?.[prompt.id] || '';
+          const originalAudioUrl = data.userAnswers[prompt.id] || '';
+          const storedAudioUrl = await uploadPracticeAudio(user.id, prompt.id, originalAudioUrl);
+          const persistedAudioUrl = storedAudioUrl || (originalAudioUrl.startsWith('http') ? originalAudioUrl : '');
+          const promptContent = JSON.stringify({
+            prompt: prompt.prompt,
+            passage: prompt.passage || '',
+            displayText: prompt.passage || prompt.prompt,
+            imageUrl: prompt.imageUrl || '',
+            audioUrl: persistedAudioUrl,
+            modelAnswer: prompt.modelAnswer || '',
+            title: prompt.title,
+            taskType: prompt.taskType,
+          });
+          const transcribedText = normalizeTranscribedText(data.transcribedTexts?.[prompt.id]);
           await savePracticeHistory({
             userId: user.id,
             mode: 'speaking',
@@ -335,6 +594,22 @@ export default function SpeakingResultPage() {
     return Math.round(vals.reduce((sum, v) => sum + v, 0) / vals.length);
   }, [results]);
 
+  const averageToeicPart1 = useMemo(() => {
+    const vals = Object.values(results)
+      .map((r) => r.part1ReadAloud?.overallScore || 0)
+      .filter((v) => v > 0);
+    if (!vals.length) return 0;
+    return Math.round(vals.reduce((sum, v) => sum + v, 0) / vals.length);
+  }, [results]);
+
+  const averageToeicPart2To5 = useMemo(() => {
+    const vals = Object.values(results)
+      .map((r) => r.partSpeaking?.overallScore || 0)
+      .filter((v) => v > 0);
+    if (!vals.length) return 0;
+    return Math.round(vals.reduce((sum, v) => sum + v, 0) / vals.length);
+  }, [results]);
+
   if (grading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -354,7 +629,7 @@ export default function SpeakingResultPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-slate-500">Không có dữ liệu bài làm.</p>
-        <button onClick={() => router.push('/home/practice/speaking')} className="px-6 py-2.5 bg-primary text-white rounded-full font-medium hover:bg-primary-dark transition-colors">
+        <button onClick={() => router.push('/home')} className="px-6 py-2.5 bg-primary text-white rounded-full font-medium hover:bg-primary-dark transition-colors">
           Về trang luyện nói
         </button>
       </div>
@@ -362,14 +637,23 @@ export default function SpeakingResultPage() {
   }
 
   const { partTitle, prompts, userAnswers } = data;
+  const isPart1Page = data.partNumber === 1;
+  const isPart2To5Page = data.partNumber >= 2 && data.partNumber <= 5;
   const recordedCount = prompts.filter(p => userAnswers[p.id]).length;
   const gradedCount = Object.keys(results).length;
+  const headerScore = isPart1Page
+    ? averageToeicPart1
+    : isPart2To5Page && averageToeicPart2To5 > 0
+      ? averageToeicPart2To5
+      : averageOverall;
+  const headerMax = isPart1Page || (isPart2To5Page && averageToeicPart2To5 > 0) ? 200 : 100;
+  const headerPercent = headerMax === 200 ? Math.round((headerScore / 200) * 100) : headerScore;
 
   return (
     <div className="pb-8">
       {/* Header */}
       <div className="rounded-md bg-linear-to-r from-primary to-teal-500 px-6 py-5 mb-6 flex items-center gap-3 shadow-lg shadow-primary/20">
-        <button onClick={() => router.push('/home/practice/speaking')} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+        <button onClick={() => router.push('/home')} className="p-2 hover:bg-white/10 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
         <div className="flex-1">
@@ -378,9 +662,9 @@ export default function SpeakingResultPage() {
             AI Chấm · {recordedCount}/{prompts.length} câu đã thu
           </p>
         </div>
-        {averageOverall > 0 && (
+        {headerScore > 0 && (
           <div className="bg-white/20 rounded-2xl px-4 py-2 text-center">
-            <p className="text-2xl font-black text-white">{averageOverall}</p>
+            <p className="text-2xl font-black text-white">{headerScore}/{headerMax}</p>
             <p className="text-xs text-teal-100">trung bình</p>
           </div>
         )}
@@ -402,18 +686,18 @@ export default function SpeakingResultPage() {
             </div>
           </div>
 
-          {averageOverall > 0 && (
+          {headerScore > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-700">Điểm trung bình</span>
-                <span className="text-lg font-black text-primary">{averageOverall}/100</span>
+                <span className="text-lg font-black text-primary">{headerScore}/{headerMax}</span>
               </div>
               <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    averageOverall >= 80 ? 'bg-green-500' : averageOverall >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                    headerPercent >= 80 ? 'bg-green-500' : headerPercent >= 60 ? 'bg-amber-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${averageOverall}%` }}
+                  style={{ width: `${headerPercent}%` }}
                 />
               </div>
             </div>
@@ -430,7 +714,7 @@ export default function SpeakingResultPage() {
               audioUrl={userAnswers[prompt.id] || ''}
               result={results[prompt.id]}
               index={index}
-              transcribedText={data.transcribedTexts?.[prompt.id]}
+              transcribedText={normalizeTranscribedText(data.transcribedTexts?.[prompt.id])}
             />
           ))}
         </div>
@@ -438,7 +722,7 @@ export default function SpeakingResultPage() {
         {/* Back button */}
         <div className="mt-6">
           <button
-            onClick={() => router.push('/home/practice/speaking')}
+            onClick={() => router.push('/home')}
             className="w-full py-3.5 bg-primary text-white rounded-xl font-bold text-[15px] hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20"
           >
             Về trang luyện nói
