@@ -44,6 +44,125 @@ export interface ConfirmPaymentResponse {
 }
 
 const QUESTIONS_PAGE_SIZE = 1000;
+const MAX_HEAVY_READING_QUESTIONS = 300;
+
+type QuestionBaseRow = {
+  id: string;
+  part_id: string;
+  passage_id: string | null;
+  question_text: string | null;
+  order_index: number;
+};
+
+async function fetchQuestionsByPartIdsLight(
+  partIds: string[],
+  limit?: number,
+): Promise<QuestionModel[]> {
+  if (!partIds.length) return [];
+
+  const maxRows = typeof limit === 'number' && limit > 0 ? limit : undefined;
+  const questionRows: QuestionBaseRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + QUESTIONS_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from('questions')
+      .select('id,part_id,passage_id,question_text,order_index')
+      .in('part_id', partIds)
+      .order('order_index')
+      .range(from, to);
+
+    if (error) throw error;
+
+    const page = (data || []) as QuestionBaseRow[];
+    if (!page.length) break;
+
+    questionRows.push(...page);
+    if (maxRows && questionRows.length >= maxRows) break;
+    if (page.length < QUESTIONS_PAGE_SIZE) break;
+    from += QUESTIONS_PAGE_SIZE;
+  }
+
+  const baseRows = maxRows ? questionRows.slice(0, maxRows) : questionRows;
+  if (!baseRows.length) return [];
+
+  const questionIds = baseRows.map((q) => q.id);
+
+  const [optionsRes, mediaRes] = await Promise.all([
+    supabase
+      .from('question_options')
+      .select('id,question_id,content,is_correct')
+      .in('question_id', questionIds),
+    supabase
+      .from('question_media')
+      .select('id,question_id,type,url')
+      .in('question_id', questionIds),
+  ]);
+
+  if (optionsRes.error) throw optionsRes.error;
+  if (mediaRes.error) throw mediaRes.error;
+
+  const passageIds = [
+    ...new Set(baseRows.map((q) => q.passage_id).filter(Boolean) as string[]),
+  ];
+
+  let passageById: Record<string, QuestionModel['passage']> = {};
+  if (passageIds.length) {
+    const { data: passages, error: passageError } = await supabase
+      .from('passages')
+      .select('id,part_id,title,content')
+      .in('id', passageIds);
+    if (passageError) throw passageError;
+
+    passageById = Object.fromEntries(
+      ((passages || []) as Array<Record<string, unknown>>).map((p) => [
+        p.id as string,
+        {
+          id: p.id as string,
+          part_id: (p.part_id as string) || '',
+          title: (p.title as string) || '',
+          content: (p.content as string) || '',
+        },
+      ]),
+    );
+  }
+
+  const optionsByQuestionId: Record<string, QuestionModel['options']> = {};
+  for (const row of (optionsRes.data || []) as Array<Record<string, unknown>>) {
+    const qid = row.question_id as string;
+    if (!optionsByQuestionId[qid]) optionsByQuestionId[qid] = [];
+    optionsByQuestionId[qid].push({
+      id: row.id as string,
+      question_id: qid,
+      content: (row.content as string) || '',
+      is_correct: Boolean(row.is_correct),
+    });
+  }
+
+  const mediaByQuestionId: Record<string, QuestionModel['media']> = {};
+  for (const row of (mediaRes.data || []) as Array<Record<string, unknown>>) {
+    const qid = row.question_id as string;
+    if (!mediaByQuestionId[qid]) mediaByQuestionId[qid] = [];
+    mediaByQuestionId[qid].push({
+      id: row.id as string,
+      question_id: qid,
+      type: ((row.type as string) || 'text') as 'audio' | 'image' | 'text',
+      url: (row.url as string) || '',
+    });
+  }
+
+  return baseRows.map((q) => ({
+    id: q.id,
+    part_id: q.part_id,
+    passage_id: q.passage_id,
+    question_text: q.question_text,
+    order_index: q.order_index,
+    options: optionsByQuestionId[q.id] || [],
+    media: mediaByQuestionId[q.id] || [],
+    passage: q.passage_id ? passageById[q.passage_id] || undefined : undefined,
+  }));
+}
 
 async function fetchAllQuestionsByPartIds(
   partIds: string[],
@@ -169,30 +288,11 @@ export async function getQuestionsByTestId(testId: string): Promise<QuestionMode
   })) as QuestionModel[];
 }
 
-export async function getQuestionsByPartId(partId: string): Promise<QuestionModel[]> {
-  const { data, error } = await supabase
-    .from('questions')
-    .select(`
-      *,
-      question_options(*),
-      question_media(*),
-      passages(*)
-    `)
-    .eq('part_id', partId)
-    .order('order_index');
-
-  if (error) throw error;
-
-  return (data || []).map((q: Record<string, unknown>) => ({
-    id: q.id as string,
-    part_id: q.part_id as string,
-    passage_id: q.passage_id as string | null,
-    question_text: q.question_text as string | null,
-    order_index: q.order_index as number,
-    options: (q.question_options || []) as unknown as QuestionModel['options'],
-    media: (q.question_media || []) as unknown as QuestionModel['media'],
-    passage: (q.passages || null) as unknown as QuestionModel['passage'],
-  })) as QuestionModel[];
+export async function getQuestionsByPartId(
+  partId: string,
+  limit?: number,
+): Promise<QuestionModel[]> {
+  return fetchQuestionsByPartIdsLight([partId], limit);
 }
 
 export async function getQuestionsByListeningPartNumber(
@@ -809,34 +909,28 @@ export async function getQuestionsByReadingPartNumber(
   const testIds = tests.map((t: { id: string }) => t.id);
   const { data: parts, error: partsError } = await supabase
     .from('test_parts')
-        .select('id,test_id')
+    .select('id,test_id')
     .in('test_id', testIds)
     .eq('part_number', partNumber);
   if (partsError) throw partsError;
   if (!parts?.length) return [];
 
-  const partIds = (parts as Array<{ id: string }>).map(p => p.id);
-  const { data, error } = await supabase
-    .from('questions')
-    .select(`
-      *,
-      question_options(*),
-      question_media(*),
-      passages(*)
-    `)
-    .in('part_id', partIds)
-    .order('order_index');
-
-  if (error) throw error;
+  const partIds = (parts as Array<{ id: string }>).map((p) => p.id);
+  const limit =
+    partNumber === 6 || partNumber === 7
+      ? MAX_HEAVY_READING_QUESTIONS
+      : undefined;
+  const data = await fetchQuestionsByPartIdsLight(partIds, limit);
+  if (!data.length) return [];
 
   // Map test_id vào question
   const partTestIdMap: Record<string, string> = {};
   for (const p of (parts || []) as Array<{ id: string; test_id: string }>) {
     partTestIdMap[p.id] = p.test_id;
   }
-  const withTestId = (data || []).map((q: Record<string, unknown>) => ({
+  const withTestId = data.map((q) => ({
     ...q,
-    test_id: partTestIdMap[q.part_id as string],
+    test_id: partTestIdMap[q.part_id] || '',
   }));
 
   // Sort: theo test order, rồi group passage trong mỗi test
@@ -844,13 +938,13 @@ export async function getQuestionsByReadingPartNumber(
   testIds.forEach((id, idx) => { testOrder[id] = idx; });
 
   const sorted = [...withTestId].sort((a, b) => {
-    const aOrd = testOrder[(a as Record<string, unknown>)['test_id'] as string] ?? 0;
-    const bOrd = testOrder[(b as Record<string, unknown>)['test_id'] as string] ?? 0;
+    const aOrd = testOrder[a.test_id] ?? 0;
+    const bOrd = testOrder[b.test_id] ?? 0;
     if (aOrd !== bOrd) return aOrd - bOrd;
 
     // Trong cùng test: group theo passage_id
-    const aPassage = ((a as Record<string, unknown>).passage_id as string | null) || '';
-    const bPassage = ((b as Record<string, unknown>).passage_id as string | null) || '';
+    const aPassage = a.passage_id || '';
+    const bPassage = b.passage_id || '';
 
     if (aPassage !== bPassage) {
       // Có passage trước, không passage sau
@@ -859,19 +953,19 @@ export async function getQuestionsByReadingPartNumber(
       return aPassage.localeCompare(bPassage);
     }
 
-    return ((a as Record<string, unknown>)['order_index'] as number || 0) - ((b as Record<string, unknown>)['order_index'] as number || 0);
+    return (a.order_index || 0) - (b.order_index || 0);
   });
 
-  return sorted.map((q: Record<string, unknown>) => ({
-    id: q.id as string,
-    part_id: q.part_id as string,
-    passage_id: q.passage_id as string | null,
-    question_text: q.question_text as string | null,
-    order_index: q.order_index as number,
-    options: (q.question_options || []) as unknown as QuestionModel['options'],
-    media: (q.question_media || []) as unknown as QuestionModel['media'],
-    passage: (q.passages || null) as unknown as QuestionModel['passage'],
-  })) as QuestionModel[];
+  return sorted.map((q) => ({
+    id: q.id,
+    part_id: q.part_id,
+    passage_id: q.passage_id,
+    question_text: q.question_text,
+    order_index: q.order_index,
+    options: q.options,
+    media: q.media,
+    passage: q.passage,
+  }));
 }
 
 export async function saveListeningPracticeTracking(
@@ -958,31 +1052,46 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
   const testIds = tests.map((t: { id: string }) => t.id);
   const fallbackTestId = testIds[0];
 
-  // Lấy part từ test đầu tiên để practice dùng
-  const { data: firstTestParts, error: firstPartsError } = await supabase
-    .from('test_parts')
-    .select('id,test_id,part_number')
-    .eq('test_id', fallbackTestId)
-    .in('part_number', [5, 6, 7])
-    .order('part_number');
-  if (firstPartsError) throw firstPartsError;
-
-  const partIdsByNumber: Record<number, string> = {};
-  const partNumberByPartId: Record<string, number> = {};
-  for (const p of firstTestParts as Array<{ id: string; part_number: number }>) {
-    partIdsByNumber[p.part_number] = p.id;
-    partNumberByPartId[p.id] = p.part_number;
-  }
-
   // Đếm câu từ TẤT CẢ tests — để hiển thị đúng tổng số câu
   const { data: allParts, error: allPartsError } = await supabase
     .from('test_parts')
-    .select('id,part_number')
+    .select('id,part_number,test_id')
     .in('test_id', testIds)
     .in('part_number', [5, 6, 7]);
   if (allPartsError) throw allPartsError;
 
-  const allPartIds = (allParts as Array<{ id: string }>).map(p => p.id);
+  const partsRows = (allParts || []) as Array<{
+    id: string;
+    part_number: number;
+    test_id: string;
+  }>;
+
+  const partIdsByNumber: Record<number, string> = {};
+  const partNumberByPartId: Record<string, number> = {};
+  const testIdByPartId: Record<string, string> = {};
+  const testOrder = new Map<string, number>(
+    testIds.map((id, index) => [id, index]),
+  );
+
+  for (const p of partsRows) {
+    partNumberByPartId[p.id] = p.part_number;
+    testIdByPartId[p.id] = p.test_id;
+    const current = partIdsByNumber[p.part_number];
+    if (!current) {
+      partIdsByNumber[p.part_number] = p.id;
+      continue;
+    }
+
+    const currentTestId = testIdByPartId[current] ?? '';
+    const currentOrder = testOrder.get(currentTestId) ?? Number.MAX_SAFE_INTEGER;
+    const candidateOrder = testOrder.get(p.test_id) ?? Number.MAX_SAFE_INTEGER;
+
+    if (candidateOrder < currentOrder) {
+      partIdsByNumber[p.part_number] = p.id;
+    }
+  }
+
+  const allPartIds = partsRows.map((p) => p.id);
   const questions = await fetchAllQuestionsByPartIds(allPartIds);
 
   const questionCountByPartId: Record<string, number> = {};
@@ -1040,10 +1149,15 @@ export async function getReadingPracticeParts(): Promise<PracticePartData[]> {
 
   // Tính questionCount: tổng từ TẤT CẢ tests cùng part_number
   return [5, 6, 7].map((partNumber) => {
-    const partId = partIdsByNumber[partNumber] || `part-${partNumber}`;
-    const total = (allParts || [])
+    const partId = partIdsByNumber[partNumber] || `missing-part-${partNumber}`;
+    const rawTotal = partsRows
       .filter((p: { part_number: number }) => p.part_number === partNumber)
       .reduce((sum, p) => sum + (questionCountByPartId[p.id] || 0), 0);
+    const total =
+      (partNumber === 6 || partNumber === 7) &&
+      rawTotal > MAX_HEAVY_READING_QUESTIONS
+        ? MAX_HEAVY_READING_QUESTIONS
+        : rawTotal;
     const stats = statsByPartNumber[partNumber];
     return {
       partId,

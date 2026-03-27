@@ -3,14 +3,20 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { getCurrentUser, getQuestionsByPartId } from '@/lib/api';
+import {
+  getCurrentUser,
+  getQuestionsByPartId,
+  getQuestionsByReadingPartNumber,
+} from '@/lib/api';
 import type { QuestionModel } from '@/lib/types';
 import LoginRequiredModal from '@/app/components/LoginRequiredModal';
 
 function ReadingQuestionContent() {
+  const MAX_HEAVY_READING_QUESTIONS = 300;
   const searchParams = useSearchParams();
   const router = useRouter();
   const partId = searchParams.get('partId') || '';
+  const partNumber = Number(searchParams.get('partNumber') || '0');
   const partTitle = searchParams.get('title') || 'Reading';
 
   const [questions, setQuestions] = useState<QuestionModel[]>([]);
@@ -29,16 +35,36 @@ function ReadingQuestionContent() {
           return;
         }
 
-        const qs = await getQuestionsByPartId(partId);
+        const hasValidPartId = Boolean(partId) && !partId.startsWith('missing-part-');
+
+        let qs: QuestionModel[] = [];
+        if (partNumber >= 5 && partNumber <= 7) {
+          // Prefer a concrete part_id so users practice a coherent set instead of mixed tests.
+          if (hasValidPartId) {
+            const maxRows =
+              partNumber === 6 || partNumber === 7
+                ? MAX_HEAVY_READING_QUESTIONS
+                : undefined;
+            qs = await getQuestionsByPartId(partId, maxRows);
+          }
+
+          // Fallback for old links or missing part mapping.
+          if (!qs.length) {
+            qs = await getQuestionsByReadingPartNumber(partNumber);
+          }
+        } else {
+          qs = await getQuestionsByPartId(partId);
+        }
+
         setQuestions(qs);
-      } catch {
-        //
+      } catch (err) {
+        console.error('Failed to load reading practice questions:', err);
       } finally {
         setLoading(false);
       }
     }
-    if (partId) load();
-  }, [partId]);
+    if (partId || (partNumber >= 5 && partNumber <= 7)) load();
+  }, [partId, partNumber]);
 
   const currentQuestion = questions[currentIndex];
   const labels = ['A', 'B', 'C', 'D'];
@@ -117,7 +143,7 @@ function ReadingQuestionContent() {
         {currentQuestion?.passage && (
           <div className="bg-white rounded-2xl border border-slate-100 p-6">
             <h4 className="font-semibold text-slate-800 mb-3">{currentQuestion.passage.title}</h4>
-            <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[500px] overflow-y-auto">
+            <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-125 overflow-y-auto">
               {currentQuestion.passage.content}
             </div>
           </div>
