@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   MessageSquare,
+  Map,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
@@ -37,6 +38,7 @@ const navItems = [
   { href: '/admin/tests', label: 'Đề thi', icon: FileText },
   { href: '/admin/vocabulary', label: 'Từ vựng', icon: BookOpen },
   { href: '/admin/grammar', label: 'Ngữ pháp', icon: ScrollText },
+  { href: '/admin/roadmap', label: 'Lộ trình', icon: Map },
   { href: '/admin/transactions', label: 'Giao dịch', icon: Receipt },
   { href: '/admin/notifications', label: 'Thông báo', icon: BellRing },
   { href: '/admin/chat', label: 'Phản hồi', icon: MessageSquare },

@@ -1,20 +1,30 @@
-'use client';
+"use client";
 
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
-import { ArrowLeft, Clock, HelpCircle, BookOpen, Headphones, AlertCircle, Lock } from 'lucide-react';
-import { getCurrentUser, getCurrentUserRole, getTestById } from '@/lib/api';
-import LoginRequiredModal from '@/app/components/LoginRequiredModal';
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Clock,
+  HelpCircle,
+  BookOpen,
+  Headphones,
+  AlertCircle,
+  Lock,
+} from "lucide-react";
+import { getCurrentUser, getCurrentUserRole, getTestById } from "@/lib/api";
+import LoginRequiredModal from "@/app/components/LoginRequiredModal";
 
 function TestStartContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const testId = searchParams.get('testId') || '';
-  const title = searchParams.get('title') || 'TOEIC Test';
-  const duration = parseInt(searchParams.get('duration') || '120');
-  const total = parseInt(searchParams.get('total') || '200');
-  const isPremiumParam = searchParams.get('isPremium') === '1';
+  const testId = searchParams.get("testId") || "";
+  const title = searchParams.get("title") || "TOEIC Test";
+  const duration = parseInt(searchParams.get("duration") || "120");
+  const total = parseInt(searchParams.get("total") || "200");
+  const isPremiumParam = searchParams.get("isPremium") === "1";
+  const mode = searchParams.get("mode") || "";
+  const returnTo = searchParams.get("returnTo") || "";
   const [isLocked, setIsLocked] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
@@ -36,7 +46,7 @@ function TestStartContent() {
           getCurrentUserRole(),
         ]);
         const premiumTest = Boolean(test?.is_premium) || isPremiumParam;
-        const premiumUser = role === 'premium' || role === 'admin';
+        const premiumUser = role === "premium" || role === "admin";
         setIsLocked(premiumTest && !premiumUser);
       } catch {
         setIsLocked(isPremiumParam);
@@ -54,10 +64,16 @@ function TestStartContent() {
       return;
     }
     if (isLocked) {
-      router.push('/home/upgrade');
+      router.push("/home/upgrade");
       return;
     }
-    router.push(`/home/exam/question?testId=${testId}&title=${encodeURIComponent(title)}`);
+    const params = new URLSearchParams({
+      testId,
+      title,
+    });
+    if (mode) params.set("mode", mode);
+    if (returnTo) params.set("returnTo", returnTo);
+    router.push(`/home/exam/question?${params.toString()}`);
   };
 
   if (checkingAccess) {
@@ -71,7 +87,6 @@ function TestStartContent() {
   return (
     <div className="pb-20 lg:pb-8">
       {/* Back */}
-     
 
       <div className="max-w-lg mx-auto">
         {/* Card */}
@@ -79,12 +94,21 @@ function TestStartContent() {
           {/* Wave header */}
           <div className="bg-linear-to-br from-primary to-teal-500 px-8 py-10 text-white relative">
             <div className="absolute bottom-0 left-0 right-0">
-              <svg viewBox="0 0 400 30" className="w-full" preserveAspectRatio="none">
-                <path d="M0,30 C100,0 300,0 400,30 L400,30 L0,30 Z" fill="white" />
+              <svg
+                viewBox="0 0 400 30"
+                className="w-full"
+                preserveAspectRatio="none"
+              >
+                <path
+                  d="M0,30 C100,0 300,0 400,30 L400,30 L0,30 Z"
+                  fill="white"
+                />
               </svg>
             </div>
             <h2 className="text-2xl font-bold mb-1">{title}</h2>
-            <p className="text-teal-100 text-sm">TOEIC® Listening & Reading Test</p>
+            <p className="text-teal-100 text-sm">
+              TOEIC® Listening & Reading Test
+            </p>
           </div>
 
           {/* Info */}
@@ -94,7 +118,9 @@ function TestStartContent() {
                 <Clock className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-xs text-slate-500">Thời gian</p>
-                  <p className="font-semibold text-slate-800">{duration} phút</p>
+                  <p className="font-semibold text-slate-800">
+                    {duration} phút
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
@@ -142,7 +168,9 @@ function TestStartContent() {
                   <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                   <div className="text-sm text-amber-800">
                     <p className="font-semibold mb-1">Đề thi Premium</p>
-                    <p className="text-xs text-amber-700">Tài khoản hiện tại cần nâng cấp để bắt đầu đề thi này.</p>
+                    <p className="text-xs text-amber-700">
+                      Tài khoản hiện tại cần nâng cấp để bắt đầu đề thi này.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -155,7 +183,7 @@ function TestStartContent() {
               onClick={handleStart}
               className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-full font-semibold text-lg transition-colors shadow-md shadow-primary/20"
             >
-              {isLocked ? 'Nâng cấp để mở khóa' : 'Bắt đầu làm bài'}
+              {isLocked ? "Nâng cấp để mở khóa" : "Bắt đầu làm bài"}
             </button>
           </div>
         </div>
@@ -173,7 +201,13 @@ function TestStartContent() {
 
 export default function TestStartPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      }
+    >
       <TestStartContent />
     </Suspense>
   );

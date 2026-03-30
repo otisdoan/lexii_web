@@ -16,6 +16,7 @@ import {
   Star,
   Menu,
   X,
+  Map,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/notifications/notification-bell';
@@ -31,6 +32,7 @@ interface UserInfo {
 const navItems = [
   { href: '/home', label: 'Luyện tập', icon: BookOpen },
   { href: '/home/exam', label: 'Thi', icon: GraduationCap },
+  { href: '/home/roadmap', label: 'Lộ trình', icon: Map },
   { href: '/home/vocabulary', label: 'Từ vựng', icon: BookText },
   { href: '/home/grammar', label: 'Ngữ pháp', icon: PenTool },
   { href: '/home/upgrade', label: 'Nâng cấp', icon: Sparkles },
